@@ -1,0 +1,14 @@
+fastapi
+uvicorn 
+python-multipart
+langchain
+openai 
+python-dotenv
+langchain_core
+langchain_community
+langchain-openai
+pypdf
+aiofiles
+unstructured
+
+

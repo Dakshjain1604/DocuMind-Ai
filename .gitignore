@@ -1,0 +1,37 @@
+# Node.js
+node_modules/
+.env
+npm-debug.log
+package-lock.json
+dist/
+backend/config.js
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.env/
+ENV/
+.venv/
+
+# VSCode
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# Uploads and generated files
+backend/uploads/
+microService/app/uploaded_files/
+
+# Frontend environment files
+frontend/.env*
+frontend/.env.local
+
+# Microservice environment files
+microService/.env 
