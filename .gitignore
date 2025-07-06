@@ -30,8 +30,8 @@ backend/uploads/
 microService/app/uploaded_files/
 
 # Frontend environment files
-frontend/.env*
-frontend/.env.local
+frontend/env
+frontend/node_modules
 
 # Microservice environment files
 microService/.env 
