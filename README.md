@@ -1,22 +1,24 @@
-📚 DocuMind AI
-DocuMind AI is an AI-powered notebook-like assistant designed to help users interact intelligently with their documents. This tool is currently under active development and will be fully ready soon.
+# 📚 DocuMind AI
 
-🚀 Features
-Generate Summary
-Upload any document and get a concise, accurate summary powered by advanced language models.
+**DocuMind AI** is an AI-powered notebook-like assistant designed to help users interact intelligently with their documents. This tool is currently under active development and will be fully ready soon.
 
-Interactive Quiz Mode
-Automatically generate and take quizzes based on the document's content to reinforce understanding.
+## 🚀 Features
 
-Custom Q&A
-Ask your own questions directly related to the uploaded document and get intelligent answers.
+1. **Generate Summary**  
+   Upload any document and get a concise, accurate summary powered by advanced language models.
 
-🛠️ Tech Stack
-Frontend: Next.js
+2. **Interactive Quiz Mode**  
+   Automatically generate and take quizzes based on the document's content to reinforce understanding.
 
-AI/ML Backend: Python (FastAPI / Flask-based, powered by NLP models)
+3. **Custom Q&A**  
+   Ask your own questions directly related to the uploaded document and get intelligent answers.
 
-Authentication & Backend Services: Node.js (Express, JWT, etc.)
+## 🛠️ Tech Stack
 
-⚠️ Project Status
-DocuMind AI is currently under development. I am Working hard to bring all features to life and provide a seamless experience. Stay tuned for updates!
+- **Frontend**: [Next.js](https://nextjs.org/)  
+- **AI/ML Backend**: Python  
+- **Authentication & Backend Services**: Node.js
+
+## ⚠️ Project Status
+
+**DocuMind AI** is currently under development. We're working hard to bring all features to life and provide a seamless experience. Stay tuned for updates!
