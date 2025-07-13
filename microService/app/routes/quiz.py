@@ -5,106 +5,105 @@ from langchain.prompts import ChatPromptTemplate
 from routes.DocContent import DocContent
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI
+import logging
 
-llm = ChatOpenAI(model="gpt-4o-mini",temperature=0.2)
+# Configure logging
+logger = logging.getLogger(__name__)
+
+llm = ChatOpenAI(
+    model="gpt-4-turbo",  # More powerful model for complex tasks
+    temperature=0.1,  # Lower temperature for more factual accuracy
+    max_tokens=4096
+)
+
 class QuizQuestion(BaseModel):
-    id: int = Field(description="Question ID")
-    question: str = Field(description="The quiz question")
-    options: List[str] = Field(description="List of 4 multiple choice options")
-    correct_answer: str = Field(description="The correct answer from the options")
-    explanation: str = Field(description="Brief explanation of the correct answer")
+    question: str = Field(description="Clear and unambiguous question")
+    options: List[str] = Field(description="Exactly 4 distinct multiple choice options", min_items=4, max_items=4)
+    correct_answer: str = Field(description="The single correct answer option")
+    explanation: str = Field(description="Brief explanation of why the answer is correct")
 
-class Quiz(BaseModel):
-    quiz: List[QuizQuestion] = Field(description="List of quiz questions")
+class QuizResponse(BaseModel):
+    quiz: List[QuizQuestion] = Field(description="List of 5 quiz questions", min_items=5, max_items=5)
+    document_overview: str = Field(description="Brief 2-sentence summary of the source document")
 
-async def Quiz(path, file_type):
-    """Generate a quiz from file content using structured output"""
+async def generate_quiz(path: str, file_type: str) -> dict:
+    """Generate structured quiz from document content"""
+    parser = PydanticOutputParser(pydantic_object=QuizResponse)
     
-    # Set up the parser
-    parser = PydanticOutputParser(pydantic_object=Quiz)
-    
-    prompt_Quiz = ChatPromptTemplate.from_messages(
-        [("system", """You are an expert professor skilled at simplifying complex information and creating clear, well-structured summaries. 
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", f"""
+You are an expert educational content creator. Generate high-quality quiz questions based on the document.
 
-        **Task:**  
-        Generate 5 MCQ questions from the context, give 4 options for each question and an answer for it.
+**Task Requirements:**
+1. Create exactly 5 MCQs covering key concepts
+2. For each question:
+   - Phrase questions clearly and unambiguously
+   - Provide 4 distinct options (A-D)
+   - Mark the single correct answer
+   - Add 1-sentence explanation
+3. Include a 2-sentence document overview
+4. Ensure:
+   - Questions test conceptual understanding
+   - Options are plausible but contain only one correct answer
+   - Avoid trivial or opinion-based questions
 
-        1. **difficulty**: keep it relevant to the type of document.  
+**Output Format:**
+{parser.get_format_instructions()}
 
-        **Formatting Guidelines**:  
-        - Use clear headings and understandable questions that give clear understanding and overall topic coverage.  
-        - Avoid similar questions and open ended questions.  
-        - Ensure logical flow between topics.  
-
-        {format_instructions}
-
-        Document:  
-        {context}""")]
-    )
+Document:
+{{context}}""")
+    ])
     
-    # Add format instructions to the prompt
-    formatted_prompt = prompt_Quiz.partial(format_instructions=parser.get_format_instructions())
-    
-    doc = DocContent(path, file_type)
-    docs = [doc]
-    
-    chain = create_stuff_documents_chain(llm, formatted_prompt)
-    result = await chain.ainvoke({"context": docs})
-    
-    # Parse the result
     try:
-        parsed_result = parser.parse(result)
-        return parsed_result.dict()
+        # Process document
+        doc = DocContent(path, file_type)
+        docs = [doc]
+        
+        # Generate quiz
+        chain = create_stuff_documents_chain(llm, prompt)
+        result = await chain.ainvoke({"context": docs})
+        
+        # Parse and validate
+        parsed = parser.parse(result)
+        return parsed.dict()
+    
     except Exception as e:
-        print(f"Parsing error: {e}")
-        # Fallback to manual parsing
-        return e
-
-# def manual_parse_fallback(text: str) -> Dict[str, Any]:
-#     """Manual parsing as fallback"""
-#     # Implementation similar to parse_text_to_json from previous example
-#     pass
-
-# Frontend card formatter
-def to_card_format(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Convert quiz data to frontend card format"""
-    return [
-        {
-            "id": q["id"],
-            "type": "multiple-choice",
-            "title": f"Question {q['id']}",
-            "question": q["question"],
-            "options": [
-                {"id": f"option_{i}", "text": option, "correct": option == q["correct_answer"]}
-                for i, option in enumerate(q["options"])
-            ],
-            "correctAnswer": q["correct_answer"],
-            "explanation": q.get("explanation", ""),
-            "metadata": {
-                "difficulty": "medium",
-                "category": "auto-generated"
-            }
+        logger.error(f"Quiz generation failed: {str(e)}")
+        return {
+            "error": "Quiz generation failed. Please try again or use a different document.",
+            "details": str(e)
         }
-        for q in quiz_data.get("quiz", [])
-    ]
 
-# Complete usage
-async def generate_quiz_cards(path, file_type):
+# This is the function you should import
+async def generate_quiz_cards(path: str, file_type: str) -> dict:
     """Main function to generate quiz cards for frontend"""
     try:
-        quiz_data = await Quiz(path, file_type)
-        cards = to_card_format(quiz_data)
+        quiz_data = await generate_quiz(path, file_type)
         
+        # Transform to frontend format
+        if "error" in quiz_data:
+            return quiz_data
+            
         return {
-            "success": True,
-            "data": {
-                "total_questions": len(cards),
-                "cards": cards
-            }
+            "document_overview": quiz_data.get("document_overview", ""),
+            "questions": [
+                {
+                    "id": idx + 1,
+                    "question": q["question"],
+                    "options": [
+                        {"id": f"opt-{idx}-{opt_idx}", "text": opt}
+                        for opt_idx, opt in enumerate(q["options"])
+                    ],
+                    "correct_answer": q["correct_answer"],
+                    "explanation": q["explanation"]
+                }
+                for idx, q in enumerate(quiz_data["quiz"])
+            ]
         }
+        
     except Exception as e:
+        logger.error(f"Quiz card generation failed: {str(e)}")
         return {
-            "success": False,
-            "error": str(e),
-            "data": {"total_questions": 0, "cards": []}
+            "error": "Failed to process quiz. Please try again.",
+            "details": str(e)
         }

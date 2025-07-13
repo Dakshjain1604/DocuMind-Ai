@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, UploadFile
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from routes.summary import summary
+
 from routes.quiz import generate_quiz_cards
 app = FastAPI()
 

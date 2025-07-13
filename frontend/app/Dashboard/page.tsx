@@ -4,10 +4,11 @@ import { Homecard } from "../components/HomeCard"
 import { useRouter } from 'next/navigation'
 import { useState } from "react"
 import axios from "axios"
+import Markdown from "react-markdown"
 
 export default function Dashboard() {
     const [upload, setUpload] = useState(true);
-    const [render, setRender] = useState(false);
+    const [render, setRender] = useState(true);
     
     const router = useRouter();
     
@@ -120,7 +121,7 @@ export default function Dashboard() {
                         heading="Quiz" 
                         mainText="Transform your study materials into engaging quizzes. Test your knowledge and reinforce learning with AI-generated questions."
                         ButtonText="Generate Quiz" 
-
+disabled={!File}
                         onClick={() => ClickHandle("/getQuiz")}
                     />
                     <Homecard 
@@ -148,10 +149,18 @@ export default function Dashboard() {
                     
                     {content && !isLoading && (
                         <div className="bg-blue-50 p-4 rounded-xl shadow-inner max-h-full overflow-y-auto border border-blue-200 px-10 py-2">
-                            <h3 className="text-lg font-semibold mb-2 text-blue-900">Document Summary:</h3>
-                            <div className="whitespace-pre-wrap prose max-w-none p-2 text-gray-900 font-bold">{content}</div>
+                            <h3 className="text-2xl font-semibold mb-2 text-blue-900">Document Summary:</h3>
+                            <div className="whitespace-pre-wrap prose max-w-none p-2 text-gray-900 font-bold">
+                                <Markdown>{content}</Markdown></div>
                         </div>
                     )}
+{/* 
+                    {quiz && !isLoading && (
+                        <div className="bg-blue-50 p-4 rounded-xl shadow-inner max-h-full overflow-y-auto border border-blue-200 px-10 py-2">
+                            <h3 className="text-2xl font-semibold mb-2 text-blue-900">Lets take a Quiz:</h3>
+                            <div className="whitespace-pre-wrap prose max-w-none p-2 text-gray-900 font-bold">{content}</div>
+                        </div>  
+                    )} */}
                 
                     {error && (
                         <div className="bg-red-50 p-4 rounded-xl shadow-inner border border-red-200">
