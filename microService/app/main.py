@@ -2,21 +2,25 @@
 from typing import Annotated
 import uvicorn
 import aiofiles
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile ,  Form
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from routes.summary import summary
-
 from routes.quiz import generate_quiz_cards
+from routes.RAG import RAG
+from pydantic import BaseModel
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:3001"], 
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
 
 async def getFileLocation(file: UploadFile = File(...)):
     file_location = f"{UPLOAD_DIR}/{file.filename}"
@@ -56,6 +60,18 @@ async def GetQuiz(file: UploadFile = File(...)):
     return {"filename": file.filename, "summary": result, "status": "completed"}
 
 
+
+@app.post('/RAG')
+async def CustomQandA(file: UploadFile = File(...),
+    input: str = Form(...)
+    ):
+    path= await getFileLocation(file)
+    file_path=path["file_location"]
+    file_type=path["file_type"]
+    input=input
+    result=await RAG(file_path,file_type,input)
+    return {"answer": result}
+    
 
 
 

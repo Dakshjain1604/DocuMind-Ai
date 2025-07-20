@@ -1,109 +1,214 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate
-from routes.DocContent import DocContent
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI
+from routes.DocContent import DocContent
+import json
 import logging
 
-# Configure logging
+# Configure logging for debugging and monitoring
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-llm = ChatOpenAI(
-    model="gpt-4-turbo",  # More powerful model for complex tasks
-    temperature=0.1,  # Lower temperature for more factual accuracy
-    max_tokens=4096
-)
+# Initialize the language model (LLM) for quiz generation
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=1)
 
+# -----------------------------
+# Data Models for Quiz Structure
+# -----------------------------
+
+# Model for a single quiz question
 class QuizQuestion(BaseModel):
-    question: str = Field(description="Clear and unambiguous question")
-    options: List[str] = Field(description="Exactly 4 distinct multiple choice options", min_items=4, max_items=4)
-    correct_answer: str = Field(description="The single correct answer option")
-    explanation: str = Field(description="Brief explanation of why the answer is correct")
+    id: int = Field(description="Question ID")
+    question: str = Field(description="The quiz question")
+    options: List[str] = Field(description="List of 4 multiple choice options")
+    correct_answer: str = Field(description="The correct answer from the options")
+    explanation: Optional[str] = Field(default="", description="Brief explanation of the correct answer")
 
-class QuizResponse(BaseModel):
-    quiz: List[QuizQuestion] = Field(description="List of 5 quiz questions", min_items=5, max_items=5)
-    document_overview: str = Field(description="Brief 2-sentence summary of the source document")
+# Model for the overall quiz (list of questions)
+class Quiz(BaseModel):
+    quiz: List[QuizQuestion] = Field(description="List of quiz questions")
 
-async def generate_quiz(path: str, file_type: str) -> dict:
-    """Generate structured quiz from document content"""
-    parser = PydanticOutputParser(pydantic_object=QuizResponse)
+# -----------------------------------
+# Prompt Template for Quiz Generation
+# -----------------------------------
+def create_quiz_prompt() -> ChatPromptTemplate:
+    """Create the quiz generation prompt template for the LLM."""
+    system_message = """You are an expert professor creating educational quizzes.
+
+**Task:** Generate 15 to 20 multiple choice questions from the provided document content in which the questions are related to the content of the document and the difficulty leveel for foist 3-4 is easy then medium then hard , include 
+    questions related to theory and content of the document , avoid asking questions that dont hold relevence to the content
+
+**Requirements:**
+- Each question must have exactly 4 options
+- Only one correct answer per question
+- Questions should cover different topics from the document
+- Avoid repetitive or overly similar questions
+- Use clear, concise language
+- Provide brief explanations for correct answers
+
+**Format:** Return a JSON object with a 'quiz' key containing a list of questions.
+Each question should have: id, question, options, correct_answer, explanation.
+
+{format_instructions}
+
+Document Content:
+{context}"""
     
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", f"""
-You are an expert educational content creator. Generate high-quality quiz questions based on the document.
+    return ChatPromptTemplate.from_messages([("system", system_message)])
 
-**Task Requirements:**
-1. Create exactly 5 MCQs covering key concepts
-2. For each question:
-   - Phrase questions clearly and unambiguously
-   - Provide 4 distinct options (A-D)
-   - Mark the single correct answer
-   - Add 1-sentence explanation
-3. Include a 2-sentence document overview
-4. Ensure:
-   - Questions test conceptual understanding
-   - Options are plausible but contain only one correct answer
-   - Avoid trivial or opinion-based questions
+# -----------------------------------
+# Fallback Manual Parsing for LLM Output
+# -----------------------------------
+def manual_parse_quiz(text: str) -> Dict[str, Any]:
+    """Fallback manual parsing when structured output fails (tries to extract JSON from text)."""
+    try:
+        # Try to extract JSON from the text
+        start_idx = text.find('{')
+        end_idx = text.rfind('}') + 1
+        
+        if start_idx != -1 and end_idx != -1:
+            json_str = text[start_idx:end_idx]
+            parsed = json.loads(json_str)
+            
+            # Validate structure
+            if 'quiz' in parsed and isinstance(parsed['quiz'], list):
+                return parsed
+                
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Manual parsing failed: {e}")
+    
+    # Return empty structure if parsing fails
+    return {"quiz": []}
 
-**Output Format:**
-{parser.get_format_instructions()}
-
-Document:
-{{context}}""")
-    ])
+# ---------------------------------------------------
+# Generate Quiz Questions from Document (Async LLM)
+# ---------------------------------------------------
+async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, Any]:
+    """Generate quiz questions from document content using LLM."""
+    
+    # Set up parser and prompt
+    parser = PydanticOutputParser(pydantic_object=Quiz)
+    prompt = create_quiz_prompt()
     
     try:
-        # Process document
+        # Get format instructions for the LLM output
+        format_instructions = parser.get_format_instructions()
+        formatted_prompt = prompt.partial(format_instructions=format_instructions)
+        
+        # Load document content
         doc = DocContent(path, file_type)
         docs = [doc]
         
-        # Generate quiz
-        chain = create_stuff_documents_chain(llm, prompt)
+        # Create and run the LLM chain
+        chain = create_stuff_documents_chain(llm, formatted_prompt)
         result = await chain.ainvoke({"context": docs})
         
-        # Parse and validate
-        parsed = parser.parse(result)
-        return parsed.dict()
-    
+        # Try to parse the result using the structured parser
+        try:
+            parsed_result = parser.parse(result)
+            return parsed_result.dict()
+        except Exception as parse_error:
+            logger.warning(f"Structured parsing failed: {parse_error}")
+            # Fall back to manual parsing if structured parsing fails
+            return manual_parse_quiz(result)
+            
     except Exception as e:
-        logger.error(f"Quiz generation failed: {str(e)}")
+        logger.error(f"Quiz generation error: {e}")
+        return {"quiz": []}
+
+# ---------------------------------------------------
+# Format Quiz Data for Frontend Consumption
+# ---------------------------------------------------
+def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert quiz data to frontend-compatible format (cards with options and metadata)."""
+    cards = []
+    
+    for q in quiz_data.get("quiz", []):
+        try:
+            # Ensure correct_answer is in options
+            correct_answer = q.get("correct_answer", "")
+            options = q.get("options", [])
+            
+            if correct_answer not in options:
+                logger.warning(f"Question {q.get('id')}: correct_answer not in options")
+                continue
+            
+            # Build the card structure expected by the frontend
+            card = {
+                "id": q.get("id"),
+                "type": "multiple-choice",
+                "title": f"Question {q.get('id')}",
+                "question": q.get("question", ""),
+                "options": [
+                    {
+                        "id": f"option_{i}",
+                        "text": option,
+                        "correct": option == correct_answer
+                    }
+                    for i, option in enumerate(options)
+                ],
+                "correctAnswer": correct_answer,
+                "explanation": q.get("explanation", ""),
+                "metadata": {
+                    "difficulty": "medium",
+                    "category": "auto-generated"
+                }
+            }
+            cards.append(card)
+            
+        except Exception as e:
+            logger.warning(f"Error formatting question {q.get('id', 'unknown')}: {e}")
+            continue
+    
+    return cards
+
+# ---------------------------------------------------
+# Main Function to Generate Quiz Cards for Frontend
+# ---------------------------------------------------
+async def generate_quiz_cards(path: str, file_type: str) -> Dict[str, Any]:
+    """Main function to generate quiz cards for frontend consumption."""
+    try:
+        # Generate quiz data from document
+        quiz_data = await generate_quiz_from_document(path, file_type)
+        
+        # Format for frontend
+        cards = format_for_frontend(quiz_data)
+        
+        # Validate we have questions
+        if not cards:
+            return {
+                "success": False,
+                "error": "No valid quiz questions could be generated",
+                "data": {"total_questions": 0, "cards": []}
+            }
+        
         return {
-            "error": "Quiz generation failed. Please try again or use a different document.",
-            "details": str(e)
+            "success": True,
+            "data": {
+                "total_questions": len(cards),
+                "cards": cards
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Quiz card generation failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": {"total_questions": 0, "cards": []}
         }
 
-# This is the function you should import
-async def generate_quiz_cards(path: str, file_type: str) -> dict:
-    """Main function to generate quiz cards for frontend"""
-    try:
-        quiz_data = await generate_quiz(path, file_type)
+# -------------------
+# Usage Example (CLI)
+# -------------------
+if __name__ == "__main__":
+    import asyncio
+    
+    async def test_quiz_generation():
+        result = await generate_quiz_cards("sample.pdf", "pdf")
+        print(f"Generated {result['data']['total_questions']} questions")
         
-        # Transform to frontend format
-        if "error" in quiz_data:
-            return quiz_data
-            
-        return {
-            "document_overview": quiz_data.get("document_overview", ""),
-            "questions": [
-                {
-                    "id": idx + 1,
-                    "question": q["question"],
-                    "options": [
-                        {"id": f"opt-{idx}-{opt_idx}", "text": opt}
-                        for opt_idx, opt in enumerate(q["options"])
-                    ],
-                    "correct_answer": q["correct_answer"],
-                    "explanation": q["explanation"]
-                }
-                for idx, q in enumerate(quiz_data["quiz"])
-            ]
-        }
-        
-    except Exception as e:
-        logger.error(f"Quiz card generation failed: {str(e)}")
-        return {
-            "error": "Failed to process quiz. Please try again.",
-            "details": str(e)
-        }
+    # asyncio.run(test_quiz_generation())

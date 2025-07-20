@@ -1,95 +1,55 @@
-"use client";
-import {
-  AuthButton,
-  InputBox,
-  Redirectstmt,
-} from "../components/subComponents/inputBox";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
+'use client'
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
 
-function Signup() {
+export default function SignupPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const router = useRouter();
-  const [success, setSucess] = useState(false);
-  const [formData, setFormData] = useState({
-    username: "",
-    firstname: "",
-    lastname: "",
-    password: "",
-  });
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  }
-  async function handleSignup() {
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
     try {
-      await axios
-        .post("http://localhost:4000/user/signup", {
-          username: formData.username,
-          password: formData.password,
-          firstname: formData.firstname,
-          lastname: formData.lastname,
-        })
-        .then((response) => {
-          alert(response.status);
-          console.log(response.data);
-          router.push("/signin");
-        });
-    } catch (error) {
-      alert(error);
+      const res = await axios.post('/api/auth/signup', { email, password });
+      setSuccess('Signup successful! Redirecting to signin...');
+      setTimeout(() => router.push('/signin'), 1500);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Signup failed');
     }
-  }
+  };
+
   return (
-    <div className="flex flex-col justify-center items-center h-screen">
-      <div className="border-gray-800 bg-white w-90 h-fit justify-center items-center flex flex-col rounded-md py-6 gap-2">
-        <div className=" text-3xl font-bold text-black">Sign Up</div>
-        <InputBox
-          type="text"
-          placeHolder="Johndoe@gmail.com"
-          heading="Username:"
-          name="username"
-          onChange={
-            handleChange
-        }
+    <div className="flex flex-col items-center justify-center min-h-screen ">
+      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-md w-full max-w-lg text-black py-5">
+        <h2 className="text-4xl font-bold mb-6 text-center">Sign Up</h2>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="w-full mb-4 px-4 py-2 border rounded"
+          required
         />
-        <InputBox
-          type="text"
-          placeHolder="John"
-          heading="First Name:"
-          name="firstname"
-          onChange={
-            handleChange
-        }
-        />
-        <InputBox
-          type="text"
-          placeHolder="Doe"
-          heading="Last Name:"
-          name="lastname"
-          onChange={
-            handleChange
-        }
-        />
-        <InputBox
+        <input
           type="password"
-          heading="Password:"
-          name="password"
-          onChange={
-            handleChange
-        }
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          className="w-full mb-4 px-4 py-2 border rounded"
+          required
         />
-        <AuthButton text="Signup" onClick={handleSignup} />
-        <Redirectstmt
-          redirectline="Already a User ? "
-          redirectTo="Signin"
-          href="/signin"
-        />
-      </div>
+        <button type="submit" className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition">Sign Up</button>
+        {error && <div className="text-red-600 mt-4 text-center">{error}</div>}
+        {success && <div className="text-green-600 mt-4 text-center">{success}</div>}
+        <div className="mt-4 text-center">
+          Already have an account? <a href="/signin" className="text-blue-600 underline">Sign In</a>
+        </div>
+      </form>
     </div>
   );
-}
-
-export default Signup;
+} 
