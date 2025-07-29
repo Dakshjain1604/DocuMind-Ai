@@ -1,4 +1,3 @@
-
 from typing import Annotated
 import uvicorn
 import aiofiles
@@ -20,8 +19,6 @@ app.add_middleware(
 )
 
 
-
-
 async def getFileLocation(file: UploadFile = File(...)):
     file_location = f"{UPLOAD_DIR}/{file.filename}"
     file_type=os.path.splitext(file.filename)[1].lower()
@@ -36,7 +33,6 @@ async def getFileLocation(file: UploadFile = File(...)):
 @app.get("/")
 def read_root():
     return {"message": "Welcome to FastAPI backend!"}
-
 
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)  # Ensure the directory exists
@@ -72,8 +68,6 @@ async def CustomQandA(file: UploadFile = File(...),
     result=await RAG(file_path,file_type,input)
     return {"answer": result}
     
-
-
 
 if __name__ == "__main__":
     uvicorn.run("main:app", port=8000, log_level="info")

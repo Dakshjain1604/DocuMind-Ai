@@ -8,18 +8,15 @@ from routes.DocContent import DocContent
 import json
 import logging
 
-# Configure logging for debugging and monitoring
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize the language model (LLM) for quiz generation
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=1)
 
-# -----------------------------
-# Data Models for Quiz Structure
-# -----------------------------
+llm = ChatOpenAI(model="gpt-4o", temperature=1)
 
-# Model for a single quiz question
+
+
 class QuizQuestion(BaseModel):
     id: int = Field(description="Question ID")
     question: str = Field(description="The quiz question")
@@ -27,13 +24,10 @@ class QuizQuestion(BaseModel):
     correct_answer: str = Field(description="The correct answer from the options")
     explanation: Optional[str] = Field(default="", description="Brief explanation of the correct answer")
 
-# Model for the overall quiz (list of questions)
+
 class Quiz(BaseModel):
     quiz: List[QuizQuestion] = Field(description="List of quiz questions")
 
-# -----------------------------------
-# Prompt Template for Quiz Generation
-# -----------------------------------
 def create_quiz_prompt() -> ChatPromptTemplate:
     """Create the quiz generation prompt template for the LLM."""
     system_message = """You are an expert professor creating educational quizzes.
@@ -59,9 +53,6 @@ Document Content:
     
     return ChatPromptTemplate.from_messages([("system", system_message)])
 
-# -----------------------------------
-# Fallback Manual Parsing for LLM Output
-# -----------------------------------
 def manual_parse_quiz(text: str) -> Dict[str, Any]:
     """Fallback manual parsing when structured output fails (tries to extract JSON from text)."""
     try:
@@ -83,9 +74,6 @@ def manual_parse_quiz(text: str) -> Dict[str, Any]:
     # Return empty structure if parsing fails
     return {"quiz": []}
 
-# ---------------------------------------------------
-# Generate Quiz Questions from Document (Async LLM)
-# ---------------------------------------------------
 async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, Any]:
     """Generate quiz questions from document content using LLM."""
     
@@ -94,15 +82,15 @@ async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, An
     prompt = create_quiz_prompt()
     
     try:
-        # Get format instructions for the LLM output
+        
         format_instructions = parser.get_format_instructions()
         formatted_prompt = prompt.partial(format_instructions=format_instructions)
         
-        # Load document content
+       
         doc = DocContent(path, file_type)
         docs = [doc]
         
-        # Create and run the LLM chain
+        
         chain = create_stuff_documents_chain(llm, formatted_prompt)
         result = await chain.ainvoke({"context": docs})
         
@@ -119,9 +107,6 @@ async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, An
         logger.error(f"Quiz generation error: {e}")
         return {"quiz": []}
 
-# ---------------------------------------------------
-# Format Quiz Data for Frontend Consumption
-# ---------------------------------------------------
 def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert quiz data to frontend-compatible format (cards with options and metadata)."""
     cards = []
@@ -165,9 +150,7 @@ def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     return cards
 
-# ---------------------------------------------------
-# Main Function to Generate Quiz Cards for Frontend
-# ---------------------------------------------------
+
 async def generate_quiz_cards(path: str, file_type: str) -> Dict[str, Any]:
     """Main function to generate quiz cards for frontend consumption."""
     try:
@@ -201,14 +184,3 @@ async def generate_quiz_cards(path: str, file_type: str) -> Dict[str, Any]:
             "data": {"total_questions": 0, "cards": []}
         }
 
-# -------------------
-# Usage Example (CLI)
-# -------------------
-if __name__ == "__main__":
-    import asyncio
-    
-    async def test_quiz_generation():
-        result = await generate_quiz_cards("sample.pdf", "pdf")
-        print(f"Generated {result['data']['total_questions']} questions")
-        
-    # asyncio.run(test_quiz_generation())

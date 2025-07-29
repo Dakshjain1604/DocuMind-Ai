@@ -7,6 +7,7 @@ import axios from "axios";
 import { QuizCard } from "../components/QuizCard";
 import LoadingIcon from "../icons/loadingIcon";
 import { ChatInput } from "../components/Chatinput";
+import Markdown from "react-markdown";
 
 
 export default function Dashboard() {
@@ -238,7 +239,7 @@ export default function Dashboard() {
                             Document Summary:
                         </h3>
                         <div className="whitespace-pre-wrap prose max-w-none p-2 text-gray-900 font-bold">
-                            {summary}
+                        <Markdown>{summary}</Markdown>
                         </div>
                     </div>
                 )}

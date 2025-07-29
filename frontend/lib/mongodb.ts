@@ -1,27 +1,27 @@
-import { MongoClient } from 'mongodb';
+import mongoose, { Connection } from "mongoose";
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Please add your MongoDB URI to .env.local');
-}
 
-const uri = process.env.MONGODB_URI;
-const options = {};
+let cachedConnection: Connection | null = null;
 
-let client;
-let clientPromise: Promise<MongoClient>;
 
-if (process.env.NODE_ENV === 'development') {
-  // In development mode, use a global variable so the value
-  // is preserved across module reloads caused by HMR (Hot Module Replacement).
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri!, options);
-    global._mongoClientPromise = client.connect();
+export async function connectToMongoDB() {
+  
+  if (cachedConnection) {
+    console.log("Using cached db connection");
+    return cachedConnection;
   }
-  clientPromise = global._mongoClientPromise;
-} else {
-  // In production mode, it's best to not use a global variable.
-  client = new MongoClient(uri!, options);
-  clientPromise = client.connect();
+  try {
+    
+    const cnx = await mongoose.connect(process.env.MONGODB_URI!);
+    
+    cachedConnection = cnx.connection;
+    
+    console.log("New mongodb connection established");
+  
+    return cachedConnection;
+  } catch (error) {
+    
+    console.log(error);
+    throw error;
+  }
 }
-
-export default clientPromise; 

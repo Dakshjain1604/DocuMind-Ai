@@ -5,6 +5,7 @@ import axios from 'axios';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
+  const [name,setName]=useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -15,7 +16,8 @@ export default function SignupPage() {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post('/api/auth/signup', { email, password });
+      const res = await axios.post('/api/auth/signup', {name, email, password });
+      console.log(name,email,password)
       setSuccess('Signup successful! Redirecting to signin...');
       setTimeout(() => router.push('/signin'), 1500);
     } catch (err: any) {
@@ -27,6 +29,14 @@ export default function SignupPage() {
     <div className="flex flex-col items-center justify-center min-h-screen ">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-md w-full max-w-lg text-black py-5">
         <h2 className="text-4xl font-bold mb-6 text-center">Sign Up</h2>
+        <input
+          type="name"
+          placeholder="Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full mb-4 px-4 py-2 border rounded"
+          required
+        />
         <input
           type="email"
           placeholder="Email"

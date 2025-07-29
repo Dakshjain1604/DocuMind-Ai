@@ -16,16 +16,16 @@ llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
 prompt_template = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-Use the following context to answer the question at the end in a well structed and readable answer feel free to consice it if it is too long.
-If the answer is not in the context, just say "I couldn’t find that in the document."
+    Use the following context to answer the question at the end in a well structed and readable answer feel free to consice it if it is too long.
+    If the answer is not in the context, just say "I couldn’t find that in the document."
 
-Context:
-{context}
+    Context:
+    {context}
 
-Question: {question}
-Answer:
-"""
-)
+    Question: {question}
+    Answer:
+    """
+    )
 
 # Build the custom LLMChain
 qa_chain = LLMChain(llm=llm, prompt=prompt_template)
@@ -36,9 +36,7 @@ async def RAG(path, file_type, input_query):
     #returs a string 
     if not doc.page_content or doc.page_content.startswith("Error"):
         return "Error loading document or no content found."
-
     # Split the text
-    #chunks -- iufhaisdlhuqairfugwifgiwfgiwefgiUFGiweugfliweufg aiofgoawiufgqifgaskidfgqiuyrfgeqriwfg
     text_splitter = CharacterTextSplitter(
         separator="\n\n",
         chunk_size=500,
@@ -47,20 +45,15 @@ async def RAG(path, file_type, input_query):
         is_separator_regex=False,
     )
     chunks = text_splitter.split_text(doc.page_content)
-
     # Convert chunks to LangChain Document objects
     documents = [Document(page_content=chunk, metadata={"source": path}) for chunk in chunks]
-
     # Create vector store
     db = Chroma.from_documents(documents=documents, embedding=embeddings_model)
     retriever = db.as_retriever()
-
     # Get relevant documents
     relevant_docs = retriever.invoke(input_query)
-
     # Concatenate contexts
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
-
     # Run custom chain
     answer = qa_chain.run({"context": context, "question": input_query})
     return answer
