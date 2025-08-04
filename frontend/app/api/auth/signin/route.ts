@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { email, password } = await req.json();
-
+    console.log(email,password)
     if (!email || !password) {
       return NextResponse.json(
         { message: "Email and password are required." },
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await User.findOne({ email });
-
+    console.log(user)
     if (!user) {
       return NextResponse.json(
         { message: "Invalid credentials." },

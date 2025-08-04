@@ -55,7 +55,7 @@ async def RAG(path, file_type, input_query):
     # Concatenate contexts
     context = "\n\n".join([doc.page_content for doc in relevant_docs])
     # Run custom chain
-    answer = qa_chain.run({"context": context, "question": input_query})
+    answer = qa_chain.invoke({"context": context, "question": input_query})
     return answer
 
 
