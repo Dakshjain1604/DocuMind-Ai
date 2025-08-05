@@ -6,7 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from routes.DocContent import DocContent
 
-llm = ChatOpenAI(model="gpt-4o",temperature=0.2)
+llm = ChatOpenAI(model="gpt-3.5-turbo",temperature=0.2)
 
 async def summary(path,file_type):
     """Generate summary from file content"""
