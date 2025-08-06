@@ -4,7 +4,7 @@ load_dotenv()
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from routes.DocContent import DocContent
+from routes.DocContent import DocContent,DocContentChunker
 
 llm = ChatOpenAI(model="gpt-3.5-turbo",temperature=0.2)
 
@@ -40,8 +40,11 @@ main Points-
 Document:
 {context}""")]
 )
-    doc = DocContent(path,file_type)
-    docs = [doc]
+    # doc = DocContent(path,file_type)
+
+    # docs = [doc]
+    db=DocContentChunker(path,file_type)
+    docs=db.similarity_search("summarize this",k=4)
     chain = create_stuff_documents_chain(llm, prompt_summary)
     result = await chain.ainvoke({"context": docs})
     return result
