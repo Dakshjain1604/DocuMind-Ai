@@ -35,3 +35,4 @@ frontend/node_modules
 
 # Microservice environment files
 microService/.env 
+microService/app/local_chroma/

@@ -4,18 +4,14 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI
-from routes.DocContent import DocContent
+from routes.DocContent import DocContent,DocContentChunker
 import json
 import logging
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-llm = ChatOpenAI(model="gpt-4o", temperature=1)
-
-
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=1)
 
 class QuizQuestion(BaseModel):
     id: int = Field(description="Question ID")
@@ -77,35 +73,37 @@ def manual_parse_quiz(text: str) -> Dict[str, Any]:
 async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, Any]:
     """Generate quiz questions from document content using LLM."""
     
-    # Set up parser and prompt
-    parser = PydanticOutputParser(pydantic_object=Quiz)
-    prompt = create_quiz_prompt()
-    
     try:
-        
+        # Step 1: Setup prompt parser
+        parser = PydanticOutputParser(pydantic_object=Quiz)
         format_instructions = parser.get_format_instructions()
-        formatted_prompt = prompt.partial(format_instructions=format_instructions)
-        
-       
-        doc = DocContent(path, file_type)
-        docs = [doc]
-        
-        
-        chain = create_stuff_documents_chain(llm, formatted_prompt)
+        prompt = create_quiz_prompt().partial(format_instructions=format_instructions)
+
+        # Step 2: Load vector store & retrieve relevant content
+        db = DocContentChunker(path, file_type)
+        if db is None:
+            return {"quiz": [], "error": "Could not load or index document."}
+
+        docs = db.similarity_search(
+            "generate 3 MCQs with 4 options and explanations from this document", k=4
+        )
+
+        # Step 3: Generate quiz using a structured chain
+        chain = create_stuff_documents_chain(llm, prompt)
         result = await chain.ainvoke({"context": docs})
-        
-        # Try to parse the result using the structured parser
+
+        # Step 4: Parse result into Pydantic format
         try:
             parsed_result = parser.parse(result)
-            return parsed_result.dict()
+            return parsed_result.model_dump()
         except Exception as parse_error:
             logger.warning(f"Structured parsing failed: {parse_error}")
-            # Fall back to manual parsing if structured parsing fails
             return manual_parse_quiz(result)
-            
+
     except Exception as e:
         logger.error(f"Quiz generation error: {e}")
-        return {"quiz": []}
+        return {"quiz": [], "error": str(e)}
+
 
 def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert quiz data to frontend-compatible format (cards with options and metadata)."""
@@ -149,7 +147,6 @@ def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             continue
     
     return cards
-
 
 async def generate_quiz_cards(path: str, file_type: str) -> Dict[str, Any]:
     """Main function to generate quiz cards for frontend consumption."""

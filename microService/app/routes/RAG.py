@@ -1,16 +1,17 @@
 from routes.DocContent import DocContent
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough, RunnableMap
+from langchain.retrievers import MultiQueryRetriever
 from langchain.chains import LLMChain
-
+from .DocContent import DocContentChunker
+from routes.utils import count_tokens
 
 # Set up embeddings and LLM
-embeddings_model = OpenAIEmbeddings(model="text-embedding-3-large")
+
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
+
+
 
 # Define your custom prompt
 prompt_template = PromptTemplate(
@@ -31,32 +32,26 @@ prompt_template = PromptTemplate(
 qa_chain = LLMChain(llm=llm, prompt=prompt_template)
 
 async def RAG(path, file_type, input_query):
-    # Load document content
-    doc = DocContent(path, file_type)
-    #returs a string 
-    if not doc.page_content or doc.page_content.startswith("Error"):
-        return "Error loading document or no content found."
-    # Split the text
-    text_splitter = CharacterTextSplitter(
-        separator="\n\n",
-        chunk_size=500,
-        chunk_overlap=50,
-        length_function=len,
-        is_separator_regex=False,
-    )
-    chunks = text_splitter.split_text(doc.page_content)
-    # Convert chunks to LangChain Document objects
-    documents = [Document(page_content=chunk, metadata={"source": path}) for chunk in chunks]
-    # Create vector store
-    db = Chroma.from_documents(documents=documents, embedding=embeddings_model)
-    retriever = db.as_retriever()
-    # Get relevant documents
-    relevant_docs = retriever.invoke(input_query)
-    # Concatenate contexts
-    context = "\n\n".join([doc.page_content for doc in relevant_docs])
-    # Run custom chain
-    answer = qa_chain.invoke({"context": context, "question": input_query})
-    return answer
+    db = DocContentChunker(path, file_type)
+    if db is None:
+        return "Error loading document or it exceeds the size limit."
+
+    retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "fetch_k": 10})
+    docs = retriever.get_relevant_documents(input_query)
+    max_context_tokens = 13500
+    model_name = "gpt-3.5-turbo"
+    selected_context = ""
+    
+    for doc in docs:
+        new_context = selected_context + "\n\n" + doc.page_content
+        if count_tokens(new_context, model_name) > max_context_tokens:
+            break
+        selected_context = new_context
+
+    # Run QA chain
+    response = qa_chain.run({"context": selected_context, "question": input_query})
+    return response
+
 
 
 

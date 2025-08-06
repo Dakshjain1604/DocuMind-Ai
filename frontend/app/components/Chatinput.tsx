@@ -26,7 +26,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onChange={(e) => setCurrentQuery(e.target.value)}
                 placeholder="Ask a question about your document..."
                 className="flex-1 p-2 border rounded focus:outline-none focus:border-blue-500"
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 disabled={isLoading}
                 type="text"
             />
