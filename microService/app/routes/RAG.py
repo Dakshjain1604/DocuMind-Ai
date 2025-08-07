@@ -1,4 +1,4 @@
-from routes.DocContent import DocContent
+
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.documents import Document
 from langchain.prompts import PromptTemplate

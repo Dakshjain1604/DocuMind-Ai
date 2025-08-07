@@ -49,21 +49,12 @@ Document:
 
     # Retrieve document chunks
     db = DocContentChunker(path, file_type)
-    retrieved_docs = db.similarity_search("summarize this", k=8)
+    retrieved_docs = db.similarity_search("summarize this", k=3)
 
-    # Concatenate and trim context to stay within token limits
-    selected_context = ""
-    for doc in retrieved_docs:
-        new_context = selected_context + "\n\n" + doc.page_content
-        if count_tokens(new_context, model_name="gpt-3.5-turbo") > MAX_CONTEXT_TOKENS:
-            break
-        selected_context = new_context
 
-    # Fallback in case no context fits
-    if not selected_context.strip():
-        selected_context = retrieved_docs[0].page_content[:5000]  # fallback slice
+
 
     # Chain + summary generation
     chain = create_stuff_documents_chain(llm, prompt_summary)
-    result = await chain.ainvoke({"context": selected_context})
+    result = await chain.ainvoke({"context": retrieved_docs})
     return result

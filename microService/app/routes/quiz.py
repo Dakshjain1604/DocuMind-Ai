@@ -4,7 +4,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_openai import ChatOpenAI
-from routes.DocContent import DocContent,DocContentChunker
+from routes.DocContent import DocContentChunker
 import json
 import logging
 
