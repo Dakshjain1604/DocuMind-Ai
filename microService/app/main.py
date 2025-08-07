@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.summary import summary
 from routes.quiz import generate_quiz_cards
 from routes.RAG import RAG
-
+from routes.DocContent import clear_document_cache
 app = FastAPI()
 
 app.add_middleware(
@@ -20,8 +20,10 @@ app.add_middleware(
 
 
 async def getFileLocation(file: UploadFile = File(...)):
+
     file_location = f"{UPLOAD_DIR}/{file.filename}"
     file_type=os.path.splitext(file.filename)[1].lower()
+    clear_document_cache()
     async with aiofiles.open(file_location,"wb")as buffer:
         content=await file.read()
         await buffer.write(content)
