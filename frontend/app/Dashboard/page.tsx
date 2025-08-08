@@ -51,6 +51,7 @@ export default function Dashboard() {
     };
 
     function ClickHandle(location: string) {
+        
         scrollToSection("text-box");
         if (selectedFile) {
             if (location === "/RAG") {
@@ -106,6 +107,7 @@ export default function Dashboard() {
         setView("none");
         const formData = new FormData();
         formData.append("file", selectedFile);
+        scrollToSection("text-box");
         if (endpoint == "/RAG") {
             handleChatQuery();
         } else {
@@ -121,6 +123,7 @@ export default function Dashboard() {
                 );
                 console.log("API response:", response.data); // Debug log
                 // If quiz endpoint, extract quiz data from response
+                
                 if (endpoint === "/getQuiz" && response.data?.summary?.data?.cards) {
                     setQuiz({
                         total_questions: response.data.summary.data.total_questions,
