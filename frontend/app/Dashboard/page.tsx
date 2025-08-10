@@ -8,6 +8,7 @@ import { QuizCard } from "../components/QuizCard";
 import LoadingIcon from "../icons/loadingIcon";
 import { ChatInput } from "../components/Chatinput";
 import Markdown from "react-markdown";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 
 export default function Dashboard() {
@@ -28,7 +29,6 @@ export default function Dashboard() {
     const [currentQuery, setCurrentQuery] = useState("");
     const [isRagMode, setIsRagMode] = useState(false);
     const router = useRouter();
-
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
         if (element) {
@@ -78,7 +78,7 @@ export default function Dashboard() {
         formdata.append("input", currentQuery);
 
         try {
-            const response = await axios.post("http://localhost:8000/RAG", formdata, {
+            const response = await axios.post(`${BACKEND_URL}/RAG`, formdata, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 timeout: 120000,
             });
@@ -114,7 +114,7 @@ export default function Dashboard() {
             try {
                 // Post file to backend endpoint
                 const response = await axios.post(
-                    `http://localhost:8000${endpoint}`,
+                    `${BACKEND_URL}`+`${endpoint}`,
                     formData,
                     {
                         headers: { "Content-Type": "multipart/form-data" },

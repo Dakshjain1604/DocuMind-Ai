@@ -1,19 +1,16 @@
 
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI
+
 from langchain.prompts import PromptTemplate
-from langchain.retrievers import MultiQueryRetriever
 from langchain.chains import LLMChain
 from .DocContent import DocContentChunker
 from routes.utils import count_tokens
 
-# Set up embeddings and LLM
 
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
 
 
 
-# Define your custom prompt
 prompt_template = PromptTemplate(
     input_variables=["context", "question"],
     template="""
@@ -28,7 +25,7 @@ prompt_template = PromptTemplate(
     """
     )
 
-# Build the custom LLMChain
+
 qa_chain = LLMChain(llm=llm, prompt=prompt_template)
 
 async def RAG(path, file_type, input_query):
@@ -48,7 +45,7 @@ async def RAG(path, file_type, input_query):
             break
         selected_context = new_context
 
-    # Run QA chain
+ 
     response = qa_chain.run({"context": selected_context, "question": input_query})
     return response
 

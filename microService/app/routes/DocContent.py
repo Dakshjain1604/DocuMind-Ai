@@ -29,18 +29,15 @@ def clear_document_cache():
     
 def DocContentChunker(path, file_type):
     try:
-        # Create cache key based on file path and modification time
         file_mtime = os.path.getmtime(path)
         cache_key = f"{path}_{file_mtime}"
         
-        # Check if we already have this document in cache
         if cache_key in document_cache:
             print(f"Using cached vector store for: {os.path.basename(path)}")
             return document_cache[cache_key]
         
         print(f"Creating new vector store for: {os.path.basename(path)}")
         
-        # Your existing file processing logic
         file_size = os.path.getsize(path)
         
         if file_type == ".pdf":
@@ -69,20 +66,18 @@ def DocContentChunker(path, file_type):
             chunks = text_splitter.split_text(doc.page_content)
             chunk_docs = [Document(page_content=chunk, metadata={"source": path}) for chunk in chunks]
 
-            # Create in-memory vector store (faster, no disk I/O)
             db = Chroma.from_documents(
                 documents=chunk_docs, 
                 embedding=embeddings_model
                 # No persist_directory = in-memory only
             )
             
-            # Cache management: remove oldest if cache is full
             if len(document_cache) >= MAX_CACHE_SIZE:
                 oldest_key = next(iter(document_cache))  # Get first (oldest) key
                 del document_cache[oldest_key]
                 print(f"Removed oldest cached document from memory")
             
-            # Cache the new vector store
+            
             document_cache[cache_key] = db
             print(f"Cached vector store. Cache size: {len(document_cache)}")
             

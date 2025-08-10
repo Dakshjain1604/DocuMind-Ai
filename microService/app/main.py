@@ -18,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 async def getFileLocation(file: UploadFile = File(...)):
 
     file_location = f"{UPLOAD_DIR}/{file.filename}"
@@ -37,27 +36,23 @@ def read_root():
     return {"message": "Welcome to FastAPI backend!"}
 
 UPLOAD_DIR = "uploaded_files"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  # Ensure the directory exists
+os.makedirs(UPLOAD_DIR, exist_ok=True)  
 
 @app.post("/getSummary")
 async def GetSummary(file: UploadFile = File(...)):
     path =await getFileLocation(file) 
     file_path=path["file_location"]
     file_type=path["file_type"]
-    result =await summary(file_path,file_type) # Make summary async and await
+    result =await summary(file_path,file_type) 
     return {"filename": file.filename, "summary": result, "status": "completed"}
-
-
 
 @app.post("/getQuiz")
 async def GetQuiz(file: UploadFile = File(...)):
     path =await getFileLocation(file) 
     file_path=path["file_location"]
     file_type=path["file_type"]
-    result =await generate_quiz_cards(file_path,file_type) # Make quiz async and await
+    result =await generate_quiz_cards(file_path,file_type)
     return {"filename": file.filename, "summary": result, "status": "completed"}
-
-
 
 @app.post('/RAG')
 async def CustomQandA(file: UploadFile = File(...),
@@ -70,6 +65,5 @@ async def CustomQandA(file: UploadFile = File(...),
     result=await RAG(file_path,file_type,input)
     return {"answer": result}
     
-
 if __name__ == "__main__":
     uvicorn.run("main:app", port=8000, log_level="info")

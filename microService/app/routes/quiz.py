@@ -24,12 +24,7 @@ class QuizQuestion(BaseModel):
 class Quiz(BaseModel):
     quiz: List[QuizQuestion] = Field(description="List of quiz questions")
 
-# Key improvements to fix data rendering issues
-
-# 1. Fix LLM configuration
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)  # More consistent output
-
-# 2. Improve document retrieval
 async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, Any]:
     try:
         parser = PydanticOutputParser(pydantic_object=Quiz)
@@ -65,7 +60,6 @@ async def generate_quiz_from_document(path: str, file_type: str) -> Dict[str, An
         logger.error(f"Quiz generation error: {e}")
         return {"quiz": [], "error": str(e)}
 
-# 3. Enhanced manual parsing
 def enhanced_manual_parse(text: str) -> Dict[str, Any]:
     """Better fallback parsing with validation."""
     try:
@@ -97,7 +91,6 @@ def enhanced_manual_parse(text: str) -> Dict[str, Any]:
     
     return {"quiz": []}
 
-# 4. Question validation function
 def validate_question_structure(q: Dict) -> bool:
     """Validate individual question structure."""
     required_fields = ['question', 'options', 'correct_answer']
@@ -122,7 +115,6 @@ def validate_question_structure(q: Dict) -> bool:
     
     return True
 
-# 5. Improved frontend formatting with data cleaning
 def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert quiz data with enhanced validation and cleaning."""
     cards = []
@@ -179,7 +171,6 @@ def format_for_frontend(quiz_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     return cards
 
-# 6. Helper functions
 def find_closest_match(target: str, options: List[str]) -> Optional[str]:
     """Find closest matching option for correct answer."""
     target_lower = target.lower().strip()
@@ -205,7 +196,6 @@ def determine_difficulty(index: int, total: int) -> str:
     else:
         return "hard"
 
-# 7. Enhanced prompt for better LLM output
 def create_quiz_prompt() -> ChatPromptTemplate:
     system_message = """You are an expert professor creating educational quizzes.
 
