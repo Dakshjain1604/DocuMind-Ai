@@ -50,36 +50,6 @@ export function InputBar() {
     });
   }
 
-  async function getQuiz() {
-    if (!selectedFile) {
-      alert("Please upload a file first.");
-      return;
-    }
-
-    setIsLoading(true);
-    setError("");
-    setContent("");
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
-    axios.post("http://localhost:8000/getQuiz", formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      timeout: 120000,
-    })
-    .then((response) => {
-      setContent(response.data.summary);
-      setIsLoading(false);
-    })
-    .catch((error) => {
-      console.error("Upload error:", error);
-      setError("Upload error occurred! " + (error.response?.data?.detail || error.message));
-      setIsLoading(false);
-    });
-  }
-
 
 
   return (

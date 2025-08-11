@@ -15,11 +15,19 @@ export default function SigninPage() {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post('/api/auth/signin', { email, password });
+      await axios.post('/api/auth/signin', { email, password });
       setSuccess('Signin successful! Redirecting...');
       setTimeout(() => router.push('/Dashboard'), 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Signin failed');
+    } catch (err: unknown) {
+      let errorMsg = 'Signin failed';
+    
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.message || errorMsg;
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+    
+      setError(errorMsg);
     }
   };
 
@@ -47,7 +55,7 @@ export default function SigninPage() {
         {error && <div className="text-red-600 mt-4 text-center">{error}</div>}
         {success && <div className="text-green-600 mt-4 text-center">{success}</div>}
         <div className="mt-4 text-center">
-          Don't have an account? <a href="/signup" className="text-blue-600 underline">Sign Up</a>
+          Don`&apos;`t have an account? <a href="/signup" className="text-blue-600 underline">Sign Up</a>
         </div>
       </form>
     </div>

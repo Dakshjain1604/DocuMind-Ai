@@ -1,8 +1,8 @@
 "use client";
 import { UploadIcon } from "../icons/uploadIcon";
 import { Homecard } from "../components/HomeCard";
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+
+import { useState} from "react";
 import axios from "axios";
 import { QuizCard } from "../components/QuizCard";
 import LoadingIcon from "../icons/loadingIcon";
@@ -13,6 +13,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function Dashboard() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
     const [quiz, setQuiz] = useState<{
         total_questions: number;
         cards: any[];
@@ -28,7 +29,7 @@ export default function Dashboard() {
     >([]);
     const [currentQuery, setCurrentQuery] = useState("");
     const [isRagMode, setIsRagMode] = useState(false);
-    const router = useRouter();
+    
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
         if (element) {
@@ -85,7 +86,7 @@ export default function Dashboard() {
             setChatMessages(prev => [...prev, { type: 'ai', message: response.data.answer }]);
             setCurrentQuery("");
         }
-        catch (e) {
+        catch  {
             setError("failed to get response from AI")
         }
         setIsLoading(false)
@@ -140,19 +141,24 @@ export default function Dashboard() {
                     setView("summary");
                 }
                 setIsLoading(false);
-            } catch (e: any) {
-                // Log the error for debugging
+            } catch (e: unknown) {
                 console.error("API error:", e);
-                // Try to extract a more informative error message
+            
                 let errorMsg = "Upload error occurred!";
-                if (e.response && e.response.data) {
-                    errorMsg = e.response.data.message || JSON.stringify(e.response.data);
-                } else if (e.message) {
+            
+                if (e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object") {
+                    const response = e.response as { data?: { message?: string } };
+                    if (response.data) {
+                        errorMsg = response.data.message || JSON.stringify(response.data);
+                    }
+                } else if (e instanceof Error) {
                     errorMsg = e.message;
                 }
+            
                 setError(errorMsg);
                 setIsLoading(false);
             }
+            
         }
     }
 

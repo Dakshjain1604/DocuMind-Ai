@@ -16,12 +16,19 @@ export default function SignupPage() {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post('/api/auth/signup', {name, email, password });
+      await axios.post('/api/auth/signup', {name, email, password });
       console.log(name,email,password)
       setSuccess('Signup successful! Redirecting to signin...');
       setTimeout(() => router.push('/signin'), 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Signup failed');
+    } catch (err: unknown) {
+      let errorMsg = 'Signin failed';
+    
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.message || errorMsg;
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
     }
   };
 
