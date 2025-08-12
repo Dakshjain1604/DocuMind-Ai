@@ -13,11 +13,13 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function Dashboard() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
+   
     const [quiz, setQuiz] = useState<{
         total_questions: number;
         cards: any[];
     } | null>(null);
+    // const [quiz, setQuiz] = useState<{ total_questions: number; cards: unknown[] } | null>(null);
+
     const [summary, setSummary] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
@@ -237,6 +239,7 @@ export default function Dashboard() {
                             Total Questions: {quiz.total_questions}
                         </div>
                         {quiz.cards.map((card) => (
+                          
                             <QuizCard key={card.id} card={card} />
                         ))}
                     </div>
