@@ -47,14 +47,12 @@ Document:
 """)
     ])
 
-    # Retrieve document chunks
     db = DocContentChunker(path, file_type)
     retrieved_docs = db.similarity_search("summarize this", k=3)
 
 
 
 
-    # Chain + summary generation
     chain = create_stuff_documents_chain(llm, prompt_summary)
     result = await chain.ainvoke({"context": retrieved_docs})
     return result
