@@ -32,7 +32,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link href="/signup"><Button variant="primary" size="lg">
-              Let`&apos;`s Get Started 
+              Let &apos;s Get Started 
             </Button></Link>
             <Link href="/signin"><Button variant="outline" size="lg">
               Sign In
