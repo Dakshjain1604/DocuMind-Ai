@@ -1,13 +1,13 @@
-from typing import Annotated
+
 import uvicorn
 import aiofiles
 from fastapi import FastAPI, File, UploadFile ,  Form
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from routes.summary import summary
-from routes.quiz import generate_quiz_cards
-from routes.RAG import RAG
-from routes.DocContent import clear_document_cache
+from app.routes.summary import summary
+from app.routes.quiz import generate_quiz_cards
+from app.routes.RAG import RAG
+from app.routes.DocContent import clear_document_cache
 app = FastAPI()
 
 app.add_middleware(
