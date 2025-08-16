@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.summary import summary
 from routes.quiz import generate_quiz_cards
 from routes.RAG import RAG
-from app.routes.DocContent import clear_document_cache
+from routes.DocContent import clear_document_cache
 app = FastAPI()
 
 app.add_middleware(
