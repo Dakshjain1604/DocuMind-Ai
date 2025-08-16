@@ -1,8 +1,8 @@
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from routes.DocContent import DocContentChunker
-from routes.utils import count_tokens  # You must define this
+from app.routes.DocContent import DocContentChunker
+from app.routes.utils import count_tokens  # You must define this
 import os
 from dotenv import load_dotenv
 
