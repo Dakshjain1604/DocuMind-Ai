@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
       { message: "User created successfully." },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Signup error:", error);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: error?.message || "Internal server error." },
       { status: 500 }
     );
   }
+  
 }

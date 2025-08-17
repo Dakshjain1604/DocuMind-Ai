@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { connectToMongoDB } from "@/lib/mongodb";
 import User from "@/models/userModel"; 
-
 const JWT_SECRET=process.env.JWT_SECRET || "changeme";
 export async function POST(req: NextRequest) {
   await connectToMongoDB();
@@ -45,11 +44,10 @@ export async function POST(req: NextRequest) {
     res.cookies.set("token", token, {
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: 60 * 60 * 1 , // 1 hour
       secure: true,
       sameSite: "none",
     });
-
     return res;
   } catch (error) {
     console.error("Signin error:", error);
