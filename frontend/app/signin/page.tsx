@@ -55,7 +55,7 @@ export default function SigninPage() {
         {error && <div className="text-red-600 mt-4 text-center">{error}</div>}
         {success && <div className="text-green-600 mt-4 text-center">{success}</div>}
         <div className="mt-4 text-center">
-          Don`&apos;`t have an account? <a href="/signup" className="text-blue-600 underline">Sign Up</a>
+          Don&apos;t have an account? <a href="/signup" className="text-blue-600 underline">Sign Up</a>
         </div>
       </form>
     </div>
