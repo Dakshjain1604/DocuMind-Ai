@@ -212,7 +212,7 @@ export default function Dashboard() {
                     />
                 </div>
             </div>
-            <div className="opacity-50"> The data is fetched from a LLM , might take a few seconds to render </div>
+            <div className="opacity-50"> The data is fetched from render(free version), so it might take a few seconds to respond due to inactivity! </div>
             <div
                 className="w-full max-w-3xl border-white border-2 flex justify-center mt-10 rounded-xl min-h-[400px] bg-gray-100/80 shadow-lg mx-auto"
                 id="text-box"
