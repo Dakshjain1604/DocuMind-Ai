@@ -6,6 +6,8 @@ from langchain_openai import OpenAIEmbeddings
 import os
 import shutil
 from dotenv import load_dotenv
+import time
+import gc
 
 load_dotenv()
 
@@ -14,9 +16,12 @@ embeddings_model = OpenAIEmbeddings(
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
+# -----------------------------
+# Global cache (in-memory)
+# -----------------------------
 document_cache = {}
 MAX_CACHE_SIZE = 3 
-persist_directory = "./local_chroma"
+base_persist_directory = "./local_chroma"
 
 # -----------------------------
 # Cache clearing functions
@@ -25,35 +30,41 @@ def clear_document_cache():
     """Clear in-memory cache"""
     global document_cache
     document_cache.clear()
+    gc.collect()
     print("Document cache cleared")
 
-def clear_chroma_cache():
-    """Delete persisted Chroma DB"""
-    if os.path.exists(persist_directory):
-        shutil.rmtree(persist_directory)
-        print("Chroma cache cleared from disk")
+def clear_file_cache(filename: str):
+    """Delete persisted Chroma DB for a specific file"""
+    file_dir = os.path.join(base_persist_directory, filename)
+    if os.path.exists(file_dir):
+        shutil.rmtree(file_dir, ignore_errors=True)
+        print(f"Chroma cache cleared for {filename}")
 
 def clear_all_cache():
     """Clear both in-memory + disk cache"""
     clear_document_cache()
-    clear_chroma_cache()
+    if os.path.exists(base_persist_directory):
+        shutil.rmtree(base_persist_directory, ignore_errors=True)
+        print("Chroma cache cleared from disk")
 
 # -----------------------------
 # Main document processing
 # -----------------------------
 def DocContentChunker(path, file_type):
     try:
-        # Always clear old cache when a new file is uploaded
-        clear_all_cache()
-
+        filename = os.path.basename(path)
         file_mtime = os.path.getmtime(path)
-        cache_key = f"{path}_{file_mtime}"
-        
+        cache_key = f"{filename}_{file_mtime}"
+
+        # ✅ Use per-file persist directory
+        persist_directory = os.path.join(base_persist_directory, filename)
+
+        # Check in-memory cache first
         if cache_key in document_cache:
-            print(f"Using cached vector store for: {os.path.basename(path)}")
+            print(f"Using cached vector store for: {filename}")
             return document_cache[cache_key]
-        
-        print(f"Creating new vector store for: {os.path.basename(path)}")
+
+        print(f"Creating new vector store for: {filename}")
         
         file_size = os.path.getsize(path)
         
@@ -84,22 +95,30 @@ def DocContentChunker(path, file_type):
             chunks = text_splitter.split_text(doc.page_content)
             chunk_docs = [Document(page_content=chunk, metadata={"source": path}) for chunk in chunks]
 
-            db = Chroma.from_documents(
-                documents=chunk_docs, 
-                embedding=embeddings_model,
-                persist_directory=persist_directory  # Now persist
-            )
-            db.add_documents(chunk_docs)            
+            # ✅ If folder exists, load & add docs. Otherwise, create fresh DB
+            if os.path.exists(persist_directory):
+                db = Chroma(
+                    persist_directory=persist_directory,
+                    embedding_function=embeddings_model
+                )
+                db.add_documents(chunk_docs)
+            else:
+                db = Chroma.from_documents(
+                    documents=chunk_docs, 
+                    embedding=embeddings_model,
+                    persist_directory=persist_directory
+                )
+
             db.persist()  # Save to disk
             
-            # Update in-memory cache
+            # Update in-memory cache (with eviction if too large)
             if len(document_cache) >= MAX_CACHE_SIZE:
                 oldest_key = next(iter(document_cache))
                 del document_cache[oldest_key]
                 print(f"Removed oldest cached document from memory")
             
             document_cache[cache_key] = db
-            print(f"Cached vector store. Cache size: {len(document_cache)}")
+            print(f"Cached vector store for {filename}. Cache size: {len(document_cache)}")
             
             return db
         
