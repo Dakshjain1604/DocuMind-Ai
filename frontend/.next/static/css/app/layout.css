@@ -1527,6 +1527,7 @@ body {
 }
 .html {
   background-color: #0a0a0a;
+  overflow: hidden;
 }
 @property --tw-rotate-x {
   syntax: "*";

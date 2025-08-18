@@ -89,7 +89,7 @@ def DocContentChunker(path, file_type):
                 embedding=embeddings_model,
                 persist_directory=persist_directory  # Now persist
             )
-            
+            db.add_documents(chunk_docs)            
             db.persist()  # Save to disk
             
             # Update in-memory cache
