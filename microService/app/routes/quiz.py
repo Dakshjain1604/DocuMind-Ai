@@ -11,7 +11,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+
 
 class QuizQuestion(BaseModel):
     id: int = Field(description="Question ID")
