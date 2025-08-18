@@ -3,8 +3,8 @@ from langchain_openai import ChatOpenAI
 
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
-from .DocContent import DocContentChunker
-from app.routes.utils import count_tokens
+from routes.DocContent import DocContentChunker
+from routes.utils import count_tokens
 
 
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
