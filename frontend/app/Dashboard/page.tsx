@@ -193,8 +193,8 @@ export default function Dashboard() {
                 </div>
                 
                 {/* Feature Cards Section */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8 w-full max-w-6xl mx-auto">
-                    <div className="w-full sm:w-1/3 max-w-sm">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8 w-full max-w-4xl mx-auto">
+                    <div className="w-full sm:w-1/3 max-w-xs">
                         <Homecard
                             heading="Quiz"
                             mainText="Transform your study materials into engaging quizzes. Test your knowledge and reinforce learning with AI-generated questions."
@@ -202,7 +202,7 @@ export default function Dashboard() {
                             onClick={() => handleApi("/getQuiz")}
                         />
                     </div>
-                    <div className="w-full sm:w-1/3 max-w-sm">
+                    <div className="w-full sm:w-1/3 max-w-xs">
                         <Homecard
                             heading="Summary"
                             mainText="Get concise, intelligent summaries of your lengthy documents in seconds. Extract key insights without reading through pages of content."
@@ -210,7 +210,7 @@ export default function Dashboard() {
                             onClick={() => handleApi("/getSummary")}
                         />
                     </div>
-                    <div className="w-full sm:w-1/3 max-w-sm">
+                    <div className="w-full sm:w-1/3 max-w-xs">
                         <Homecard
                             heading="Custom Q&A"
                             mainText="Ask any question about your documents and get precise, contextual answers. Your personal AI research assistant"
