@@ -2,24 +2,22 @@
 import { UploadIcon } from "../icons/uploadIcon";
 import { Homecard } from "../components/HomeCard";
 
-import { useState} from "react";
+import { useRef, useState} from "react";
 import axios from "axios";
 import { QuizCard } from "../components/QuizCard";
 import LoadingIcon from "../icons/loadingIcon";
 import { ChatInput } from "../components/Chatinput";
 import Markdown from "react-markdown";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-
+import Document from "next/document";
 
 export default function Dashboard() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-   
     const [quiz, setQuiz] = useState<{
         total_questions: number;
         cards: any[];
     } | null>(null);
-    // const [quiz, setQuiz] = useState<{ total_questions: number; cards: unknown[] } | null>(null);
-
+    
     const [summary, setSummary] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
@@ -32,14 +30,16 @@ export default function Dashboard() {
     const [currentQuery, setCurrentQuery] = useState("");
     const [isRagMode, setIsRagMode] = useState(false);
     
+    // scroll properties 
+
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
         if (element) {
             element.scrollIntoView({ behavior: "smooth", block: "start" });
         }
     };
-
-  
+    
+    
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
@@ -73,7 +73,7 @@ export default function Dashboard() {
 
     async function handleChatQuery() {
         if (!currentQuery.trim() || !selectedFile) return;
-
+        
         setChatMessages(prev => [...prev, { type: 'user', message: currentQuery }]);
         setIsLoading(true);
         const formdata = new FormData();
@@ -85,7 +85,9 @@ export default function Dashboard() {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 timeout: 120000,
             });
+          
             setChatMessages(prev => [...prev, { type: 'ai', message: response.data.answer }]);
+            
             setCurrentQuery("");
         }
         catch  {
@@ -235,10 +237,11 @@ export default function Dashboard() {
                 {isLoading && (
                     <div className="flex justify-center items-center p-4">
                         <span className="text-black flex flex-col sm:flex-row text-base sm:text-xl items-center text-center">
-                            <span className="mb-2 sm:mb-0">Processing your document, please wait</span>
-                            <div className="sm:pl-5">
+                            <span className="mb-2 sm:mb-0 text-lg text-black">Loading ...</span>
+                            {/* <div className="sm:pl-5">
                                 <LoadingIcon />
-                            </div>
+                            </div> */}
+                            <div className=" text-x2l bg-transparent py-10 animate-bounce"> 📚 📝 📘 📙 📑 💻 🖥️ </div>
                         </span>
                     </div>
                 )}
@@ -278,7 +281,7 @@ export default function Dashboard() {
                 {/* Chat rendering */}
                 {!isLoading && view === "chat" && isRagMode && (
                     <div className="w-full p-2 sm:p-4 text-black">
-                        <div className="mb-4 max-h-64 sm:max-h-96 overflow-y-auto space-y-3">
+                        <div className="mb-4 max-h-64 sm:max-h-96 overflow-y-bottom space-y-3" >
                             {chatMessages.map((msg, idx) => (
                                 <div key={idx} className={`p-2 sm:p-3 rounded-lg text-sm sm:text-base ${
                                     msg.type === 'user' 
@@ -288,7 +291,7 @@ export default function Dashboard() {
                                     <div className="text-xs sm:text-sm font-semibold mb-1">
                                         {msg.type === 'user' ? 'You' : 'AI'}
                                     </div>
-                                    <div className="break-words">{msg.message}</div>
+                                    <div className="break-words bottom-0"  >{msg.message}</div>
                                 </div>
                             ))}
                         </div>
@@ -297,10 +300,12 @@ export default function Dashboard() {
                             setCurrentQuery={setCurrentQuery}
                             handleChatQuery={handleChatQuery}
                             isLoading={isLoading}
+                            
                         />
                     </div>
                 )}
             </div>
+            
         </div>
     );
 }

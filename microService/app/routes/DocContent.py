@@ -56,7 +56,7 @@ def DocContentChunker(path, file_type):
         file_mtime = os.path.getmtime(path)
         cache_key = f"{filename}_{file_mtime}"
 
-        # ✅ Use per-file persist directory
+
         persist_directory = os.path.join(base_persist_directory, filename)
 
         # Check in-memory cache first
@@ -87,15 +87,15 @@ def DocContentChunker(path, file_type):
         if file_size <= 10 * 1024 * 1024:  # 10 MB limit
             text_splitter = CharacterTextSplitter(
                 separator="\n\n",
-                chunk_size=500,
-                chunk_overlap=50,
+                chunk_size=1500,
+                chunk_overlap=250,
                 length_function=len,
                 is_separator_regex=False,
             )
             chunks = text_splitter.split_text(doc.page_content)
             chunk_docs = [Document(page_content=chunk, metadata={"source": path}) for chunk in chunks]
 
-            # ✅ If folder exists, load & add docs. Otherwise, create fresh DB
+
             if os.path.exists(persist_directory):
                 db = Chroma(
                     persist_directory=persist_directory,
