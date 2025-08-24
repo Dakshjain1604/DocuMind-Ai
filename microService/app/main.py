@@ -35,7 +35,7 @@ async def getFileLocation(file: UploadFile = File(...)):
 def read_root():
     return {"message": "Welcome to FastAPI backend!"}
 
-UPLOAD_DIR = "uploaded_files"
+UPLOAD_DIR = "./tmp/uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)  
 
 @app.post("/getSummary")
