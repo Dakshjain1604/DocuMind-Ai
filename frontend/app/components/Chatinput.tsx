@@ -1,6 +1,6 @@
 "use client"
 import React from 'react';
-import { useRef } from 'react';
+
 interface ChatInputProps {
     currentQuery: string | undefined;
     setCurrentQuery: (query: string) => void;
@@ -15,7 +15,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isLoading 
 
 }) => {
-    const inputRef=useRef(null);
     const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
         
         if (e.key === 'Enter' && !isLoading && currentQuery && currentQuery.trim()) {

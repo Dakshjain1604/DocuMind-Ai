@@ -2,14 +2,12 @@
 import { UploadIcon } from "../icons/uploadIcon";
 import { Homecard } from "../components/HomeCard";
 
-import { useRef, useState} from "react";
+import { useState} from "react";
 import axios from "axios";
 import { QuizCard } from "../components/QuizCard";
-import LoadingIcon from "../icons/loadingIcon";
 import { ChatInput } from "../components/Chatinput";
 import Markdown from "react-markdown";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-import Document from "next/document";
 
 export default function Dashboard() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);

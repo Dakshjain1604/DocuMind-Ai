@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/auth/signin/route": "/api/auth/signin",
+  "/api/auth/signup/route": "/api/auth/signup",
+  "/favicon.ico/route": "/favicon.ico",
+  "/signin/page": "/signin",
+  "/Dashboard/page": "/Dashboard",
+  "/signup/page": "/signup",
+  "/page": "/",
+  "/Quiz/page": "/Quiz"
+}
