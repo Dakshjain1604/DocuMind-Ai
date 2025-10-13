@@ -6,11 +6,13 @@
 
 1. **Generate Summary**  
    Upload any document and get a concise, accurate summary powered by advanced language models.
+   It enhances learning experience
 
-2. **Interactive Quiz Mode**  
+
+3. **Interactive Quiz Mode**  
    Automatically generate and take quizzes based on the document's content to reinforce understanding.
 
-3. **Custom Q&A**  
+4. **Custom Q&A**  
    Ask your own questions directly related to the uploaded document and get intelligent answers.
 
 ## 🛠️ Tech Stack
