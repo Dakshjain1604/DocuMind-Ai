@@ -23,4 +23,4 @@
 
 ## ✅ Project Status
 
-**DocuMind AI** is now fully functional. The authentication system and all routes are handled using Next.js, and the frontend is also built with Next.js. Enjoy seamless document interaction and AI-powered features!
+**DocuMind AI** is now fully functional. The authentication system and all routes are handled using Next.js, and the frontend is also built with Next.js. Enjoy seamless document interaction and AI-powered features
