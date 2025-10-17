@@ -16,9 +16,7 @@ embeddings_model = OpenAIEmbeddings(
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
-# -----------------------------
-# Global cache (in-memory)
-# -----------------------------
+
 document_cache = {}
 MAX_CACHE_SIZE = 3 
 base_persist_directory = "./local_chroma"
