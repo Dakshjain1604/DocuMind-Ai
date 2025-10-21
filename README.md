@@ -4,7 +4,7 @@
 You Can generate Quiz, Summary and even ask custom questions on it 
 The project is now in a fully working state.
 
-## 🚀 Features
+##  Features
 
 1. **Generate Summary**  
    Upload any document and get a concise, accurate summary powered by advanced language models.
