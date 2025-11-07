@@ -2,7 +2,7 @@
 
 **DocuMind AI** is an AI-powered notebook-like assistant designed to help users interact intelligently with their documents. 
 You Can generate Quiz, Summary and even ask custom questions on it 
-The project is now in a fully working state.
+The project is now in a fully working state
 
 ##  Features
 
