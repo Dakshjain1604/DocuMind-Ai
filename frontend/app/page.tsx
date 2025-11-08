@@ -5,7 +5,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
+
       <header className="container mx-auto px-4 py-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">DocuMind AI</h1>
@@ -16,9 +16,9 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
+
       <main className="container mx-auto px-4 py-16">
-        {/* Hero Section */}
+ 
         <div className="text-center max-w-4xl mx-auto mb-16">
           <h2 className="text-5xl md:text-6xl font-bold mb-6 leading-tight bg-gradient-to-r from-purple-600 via-pink-500 to-pink-400 text-transparent bg-clip-text">
             Transform Your Documents with{" "}
@@ -40,7 +40,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Features Section */}
+
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
           <div className="text-center p-6 border-white border-1 rounded-md">
             <h3 className="text-2xl font-semibold mb-4">Smart Summaries</h3>
@@ -65,7 +65,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* How It Works */}
+
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h3 className="text-3xl font-bold mb-8">How It Works</h3>
           <div className="space-y-6 text-left">
@@ -105,7 +105,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* CTA Section */}
+
         <div className="text-center max-w-2xl mx-auto">
           <h3 className="text-3xl font-bold mb-4">Ready to Supercharge Your Learning?</h3>
           <p className="text-gray-400 text-lg mb-8">
@@ -114,7 +114,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
+
       <footer className="container mx-auto px-4 py-8 border-t border-gray-800">
         <div className="text-center text-gray-500">
           <p>&copy; 2024 DocuMind AI. </p>
