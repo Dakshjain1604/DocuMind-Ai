@@ -23,6 +23,3 @@ The project is now in a fully working state
 - **Authentication & API Routes**: Next.js (App Router, API routes)  
 - **AI/ML Backend**: Python
 
-## Project Status
-
-**DocuMind AI** is now fully functional. The authentication system and all routes are handled using Next.js and the frontend is also built with Next.js. Enjoy seamless document interaction and AI-powered features
