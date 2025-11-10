@@ -21,5 +21,5 @@ The project is now in a fully working state
 
 - **Frontend**: [Next.js](https://nextjs.org/)  
 - **Authentication & API Routes**: Next.js (App Router, API routes)  
-- **AI/ML Backend**: Python
+- **AI/ML Backend**: Python (FastAPI)
 
