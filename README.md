@@ -7,7 +7,7 @@ The project is now in a fully working state
 ##  Features
 
 1. **Generate Summary**  
-   Upload any document and get a concise, accurate summary powered by advanced language models.
+   Upload any document and get a concise  accurate summary powered by advanced language models.
    It enhances learning experience
 
 
