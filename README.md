@@ -17,9 +17,4 @@ The project is now in a fully working state
 4. **Custom Q&A**  
    Ask your own questions directly related to the uploaded document and get intelligent answers.
 
-##  Tech Stack
-
-- **Frontend**: [Next.js](https://nextjs.org/)  
-- **Authentication & API Routes**: Next.js (App Router, API routes)  
-- **AI/ML Backend**: Python (FastAPI)
 
