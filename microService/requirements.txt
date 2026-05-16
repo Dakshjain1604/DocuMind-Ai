@@ -4,15 +4,16 @@ python-multipart
 python-dotenv
 aiofiles
 httpx
-openai>=1.0
+openai>=1.50,<2.0
 tiktoken
 
 # Document loading + chunking + vector store
-langchain
-langchain-core
-langchain-community
-langchain-openai
-langchain-chroma
+# Pin a coherent langchain 0.3.x stack to avoid drift across packages.
+langchain>=0.3.20,<0.4
+langchain-core>=0.3.60,<0.4
+langchain-community>=0.3.20,<0.4
+langchain-openai>=0.3.0,<0.4
+langchain-chroma>=0.2.0,<0.3
 pypdf
 unstructured
 

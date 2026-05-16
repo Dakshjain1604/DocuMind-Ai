@@ -1,11 +1,12 @@
 """End-to-end: index a small fixture, then query for a known fact.
 
-Uses mock LLM responses so this runs offline. Validates that:
-- indexing produces all artifacts
-- chroma + bm25 retrieve the right chunk for a known query
-- the answerer streams tokens that contain a citation
+LLM calls (graph extraction, summaries, query rewrite, answer streaming) are
+mocked. Embeddings via Chroma are NOT mocked — this test requires a real
+OPENAI_API_KEY to validate the full real-Chroma + real-BM25 retrieval path.
+The test skips when only the placeholder test key is present.
 """
 import json
+import os
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -17,6 +18,12 @@ from app.indexing.graph_extractor import GraphBuild
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "short.md"
+
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("OPENAI_API_KEY", "sk-test").startswith("sk-test"),
+    reason="e2e requires a real OPENAI_API_KEY for Chroma embeddings",
+)
 
 
 @pytest.fixture
