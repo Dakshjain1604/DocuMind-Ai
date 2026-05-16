@@ -126,3 +126,15 @@ async def post_summary(body: SummaryBody):
         return {"summary": text}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="doc_hash not indexed")
+
+
+from app.routes.quiz import generate_quiz_cards
+
+
+class QuizBody(BaseModel):
+    doc_hash: str
+
+
+@app.post("/quiz")
+async def post_quiz(body: QuizBody):
+    return await generate_quiz_cards(body.doc_hash)
