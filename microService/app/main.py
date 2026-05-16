@@ -1,70 +1,80 @@
-
-import uvicorn
-import aiofiles
-from fastapi import FastAPI, File, UploadFile ,  Form
+"""FastAPI app — DocuMind AI hybrid GraphRAG."""
+from __future__ import annotations
+import json
 import os
-from fastapi.middleware.cors import CORSMiddleware
-from app.routes.summary import summary
-from app.routes.quiz import generate_quiz_cards
-from app.routes.RAG import RAG
-from app.routes.DocContent import clear_document_cache
-app = FastAPI()
+from pathlib import Path
 
+import aiofiles
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from langchain_core.documents import Document
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredWordDocumentLoader,
+)
+
+from app.core.streaming import sse_event, sse_error, sse_token
+from app.indexing.pipeline import index_document
+from app.indexing.store import load_artifacts, artifacts_exist, doc_hash_from_bytes
+from app.retrieval.orchestrator import answer
+
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-async def getFileLocation(file: UploadFile = File(...)):
+UPLOAD_DIR = Path("./tmp/uploaded_files")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MAX_MB = int(os.environ.get("RAG_MAX_FILE_MB", "25"))
 
-    file_location = f"{UPLOAD_DIR}/{file.filename}"
-    file_type=os.path.splitext(file.filename)[1].lower()
-    clear_document_cache()
-    async with aiofiles.open(file_location,"wb")as buffer:
-        content=await file.read()
-        await buffer.write(content)
-        return {
-            "file_location":file_location,
-            "file_type":file_type
-        }
-    
+
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to FastAPI backend!"}
+def root():
+    return {"message": "DocuMind AI — hybrid GraphRAG"}
 
-UPLOAD_DIR = "./tmp/uploaded_files"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  
 
-@app.post("/getSummary")
-async def GetSummary(file: UploadFile = File(...)):
-    path =await getFileLocation(file) 
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    result =await summary(file_path,file_type) 
-    return {"filename": file.filename, "summary": result, "status": "completed"}
+def _load_documents(path: Path, file_type: str) -> list[Document]:
+    if file_type == ".pdf":
+        return PyPDFLoader(str(path)).load()
+    if file_type == ".txt" or file_type == ".md":
+        return TextLoader(str(path)).load()
+    return UnstructuredWordDocumentLoader(str(path)).load()
 
-@app.post("/getQuiz")
-async def GetQuiz(file: UploadFile = File(...)):
-    path =await getFileLocation(file) 
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    result =await generate_quiz_cards(file_path,file_type)
-    return {"filename": file.filename, "summary": result, "status": "completed"}
 
-@app.post('/RAG')
-async def CustomQandA(file: UploadFile = File(...),
-    input: str = Form(...)
-    ):
-    path= await getFileLocation(file)
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    input=input
-    result=await RAG(file_path,file_type,input)
-    return {"answer": result}
-    
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+@app.post("/index")
+async def post_index(file: UploadFile = File(...)):
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > MAX_MB:
+        raise HTTPException(status_code=413, detail=f"File too large ({size_mb:.1f}MB > {MAX_MB}MB)")
+
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
+        raise HTTPException(status_code=415, detail=f"Unsupported type: {suffix}")
+
+    save_path = UPLOAD_DIR / (file.filename or "upload")
+    async with aiofiles.open(save_path, "wb") as f:
+        await f.write(content)
+
+    try:
+        documents = _load_documents(save_path, suffix)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not read document: {e}")
+
+    if not documents or not any(d.page_content.strip() for d in documents):
+        raise HTTPException(status_code=422, detail="No extractable text — is this a scanned PDF?")
+
+    async def gen():
+        try:
+            async for ev in index_document(file_bytes=content, documents=documents):
+                yield sse_event(ev["event"], ev["data"])
+        except Exception as e:
+            yield sse_error(str(e))
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
