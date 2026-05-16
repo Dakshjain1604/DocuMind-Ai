@@ -34,3 +34,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Manual smoke test (hybrid GraphRAG)
+
+Start backend (`cd microService && uvicorn app.main:app --port 8000`) and frontend (`npm run dev`). Then:
+
+- [ ] Upload a PDF → progress events stream (chunking → embedding → extracting graph → done) → header shows "indexed ✓"
+- [ ] Click "Generate Quiz" → quiz cards render
+- [ ] Click "Summarize" → summary renders
+- [ ] Click "Chat with AI" → ask "what produces ATP?" → answer streams token-by-token with [n] citation chips
+- [ ] Click a citation chip → "Citation clicked → chunk N" appears
+- [ ] Click "View Graph" → force-directed graph populates; click a node → highlights
+- [ ] Re-upload same file → "cached ✓" appears almost instantly
+- [ ] Network drop mid-stream → toast / error shown, partial answer preserved on screen
