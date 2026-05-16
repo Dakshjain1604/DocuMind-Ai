@@ -31,7 +31,10 @@ app.add_middleware(
 
 UPLOAD_DIR = Path("./tmp/uploaded_files")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-MAX_MB = int(os.environ.get("RAG_MAX_FILE_MB", "25"))
+
+
+def _max_mb() -> int:
+    return int(os.environ.get("RAG_MAX_FILE_MB", "25"))
 
 
 @app.get("/")
@@ -51,8 +54,9 @@ def _load_documents(path: Path, file_type: str) -> list[Document]:
 async def post_index(file: UploadFile = File(...)):
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
-    if size_mb > MAX_MB:
-        raise HTTPException(status_code=413, detail=f"File too large ({size_mb:.1f}MB > {MAX_MB}MB)")
+    max_mb = _max_mb()
+    if size_mb > max_mb:
+        raise HTTPException(status_code=413, detail=f"File too large ({size_mb:.1f}MB > {max_mb}MB)")
 
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
