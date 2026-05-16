@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CitationChip } from "./CitationChip";
 
 type Citation = { n: number; chunk_id: number };
@@ -32,8 +32,14 @@ export function ChatStream({
   const [citations, setCitations] = useState<Citation[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [docHash]);
 
   const ask = useCallback(async () => {
+    if (!query.trim()) return;
     setAnswer("");
     setCitations([]);
     setErr(null);
@@ -46,7 +52,7 @@ export function ChatStream({
         body: JSON.stringify({ doc_hash: docHash, query }),
       });
       if (!r.ok || !r.body) {
-        setErr(`Request failed: ${r.status}`);
+        setErr(`REQUEST FAILED · ${r.status}`);
         return;
       }
       const reader = r.body.getReader();
@@ -67,7 +73,7 @@ export function ChatStream({
           const data = JSON.parse(dataLine.replace("data:", "").trim());
           if (evt === "context") setCitations(data.citations ?? []);
           else if (evt === "token") setAnswer((a) => a + data.text);
-          else if (evt === "error") setErr(data.message ?? "stream error");
+          else if (evt === "error") setErr(data.message ?? "STREAM ERROR");
         }
       }
     } catch (e: unknown) {
@@ -78,11 +84,16 @@ export function ChatStream({
   }, [docHash, query]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
+    <div className="space-y-6">
+      {/* Input row */}
+      <div className="flex items-stretch border border-[var(--rule)] bg-[var(--ink)]">
+        <span className="flex items-center px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--vermillion)]">
+          QRY <span className="ml-2 blink">▮</span>
+        </span>
         <input
-          className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-white"
-          placeholder="Ask about this document…"
+          ref={inputRef}
+          className="flex-1 bg-transparent py-3 pr-3 font-mono text-[14px] text-[var(--paper)] placeholder:text-[var(--paper-3)]/30 focus:outline-none"
+          placeholder="ask anything · enter to dispatch"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !busy && ask()}
@@ -90,15 +101,52 @@ export function ChatStream({
         <button
           onClick={ask}
           disabled={busy || !query}
-          className="px-4 py-2 rounded bg-purple-600 text-white disabled:opacity-50"
+          className="border-l border-[var(--rule)] bg-[var(--ink-2)] px-5 font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--paper)] transition-colors hover:bg-[var(--vermillion)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[var(--ink-2)] disabled:hover:text-[var(--paper)]"
         >
-          {busy ? "…" : "Ask"}
+          {busy ? "··· dispatch" : "dispatch →"}
         </button>
       </div>
-      <div className="prose prose-invert max-w-none whitespace-pre-wrap text-white">
-        {renderWithCitations(answer, citations, (cid) => onCiteClick?.(cid))}
+
+      {/* Citations index */}
+      {citations.length > 0 && (
+        <div className="space-y-2">
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--paper-3)]/50">
+            ── source index · {citations.length} passage{citations.length === 1 ? "" : "s"}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {citations.map((c) => (
+              <span
+                key={c.n}
+                className="inline-flex items-center gap-1 border border-[var(--rule)] bg-[var(--ink)] px-2 py-1 font-mono text-[10px] text-[var(--paper-3)]/80"
+              >
+                <span className="text-[var(--vermillion)]">{String(c.n).padStart(2, "0")}</span>
+                <span className="text-[var(--paper-3)]/40">/</span>
+                <span>chunk {c.chunk_id}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Answer body */}
+      <div className="min-h-[160px] border-l-2 border-[var(--vermillion)]/40 pl-5">
+        {answer ? (
+          <div className="font-sans text-[18px] leading-[1.6] text-[var(--paper)] whitespace-pre-wrap">
+            {renderWithCitations(answer, citations, (cid) => onCiteClick?.(cid))}
+            {busy && <span className="blink ml-1 text-[var(--vermillion)]">▮</span>}
+          </div>
+        ) : (
+          <div className="font-sans text-[16px] italic text-[var(--paper-3)]/30">
+            {busy ? "consulting passages…" : "awaiting query"}
+          </div>
+        )}
       </div>
-      {err && <div className="text-red-400 text-sm">Error: {err}</div>}
+
+      {err && (
+        <div className="border-l-2 border-[var(--vermillion)] bg-[var(--vermillion)]/10 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--vermillion-hot)]">
+          ✕ {err}
+        </div>
+      )}
     </div>
   );
 }

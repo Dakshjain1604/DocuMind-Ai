@@ -12,14 +12,22 @@ export function CitationChip({
   onClick?: (chunk_id: number) => void;
 }) {
   const c = citations.find((x) => x.n === n);
-  if (!c) return <span>[{n}]</span>;
+  const label = String(n).padStart(2, "0");
+
+  if (!c) {
+    return (
+      <span className="mx-0.5 inline-block font-mono text-[11px] text-[var(--paper-3)]/60">
+        [{label}]
+      </span>
+    );
+  }
   return (
     <button
       onClick={() => onClick?.(c.chunk_id)}
-      className="inline-block mx-0.5 px-1.5 py-0.5 text-xs rounded bg-purple-700/30 text-purple-200 hover:bg-purple-700/60"
-      title={`Source chunk ${c.chunk_id}`}
+      className="mx-0.5 inline-flex items-center border border-[var(--vermillion)]/40 bg-[var(--ink-3)] px-1.5 py-0.5 align-baseline font-mono text-[10px] leading-none text-[var(--vermillion-hot)] transition-colors hover:border-[var(--vermillion)] hover:bg-[var(--vermillion)] hover:text-[var(--ink)]"
+      title={`SOURCE · CHUNK ${c.chunk_id}`}
     >
-      [{n}]
+      [{label}]
     </button>
   );
 }

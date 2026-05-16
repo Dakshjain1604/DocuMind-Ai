@@ -1,19 +1,13 @@
+"use client";
+
 import React, { useState } from "react";
 
-// Option type for each answer choice
-// id: unique identifier for the option
-// text: the display text for the option
-// correct: whether this option is the correct answer
-//
 type Option = {
   id: string;
   text: string;
   correct: boolean;
 };
 
-// Props for the QuizCard component
-// card: the quiz question object, including title, question, options, and explanation
-//
 type QuizCardProps = {
   card: {
     id: number;
@@ -24,65 +18,80 @@ type QuizCardProps = {
   };
 };
 
-
 export const QuizCard: React.FC<QuizCardProps> = ({ card }) => {
- 
   const [selected, setSelected] = useState<string | null>(null);
-
- 
   const handleSelect = (optionId: string) => {
-    if (selected === null) {
-      setSelected(optionId);
-    }
+    if (selected === null) setSelected(optionId);
   };
 
-  // Render the quiz card
+  const labels = ["A", "B", "C", "D"];
+
   return (
-    // Card container with dark background and padding
-    <div className="bg-gray-600 rounded-lg shadow-md p-6">
-    
-      <div className="text-lg font-semibold mb-2 text-white">{card.title}</div>
-    
-      <div className="mb-3 text-base text-white-200">{card.question}</div>
-      
-      <ul className="mb-3">
-        {card.options.map((opt) => {
-         
-          let optionStyle =
-            "px-4 py-2 mb-2 rounded border cursor-pointer transition-all select-none ";
-          if (selected === null) {
-            
-            optionStyle += "bg-gray-200 border-gray-200 hover:bg-gray-400 text-black";
-          } else if (opt.id === selected) {
-          
-            optionStyle += opt.correct
-              ? "bg-green-200 border-green-500 text-green-900 font-semibold"
-              : "bg-red-200 border-red-500 text-red-900 font-semibold";
-          } else if (opt.correct) {
-            
-            optionStyle += "bg-green-100 border-green-400 text-green-800";
+    <div className="regmark border border-[var(--rule)] bg-[var(--ink-2)] p-6">
+      <span className="rm-tr" />
+      <span className="rm-bl" />
+
+      <div className="mb-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--paper-3)]/55">
+        <span>Q · {String(card.id).padStart(2, "0")}</span>
+        <span className="text-[var(--vermillion)]">{card.title}</span>
+      </div>
+
+      <div className="mb-5 font-display text-[24px] leading-[1.25] text-[var(--paper)]">
+        {card.question}
+      </div>
+
+      <ul className="space-y-2">
+        {card.options.map((opt, i) => {
+          const label = labels[i] ?? String(i);
+          const isPicked = selected === opt.id;
+          const showResult = selected !== null;
+          const isCorrect = opt.correct;
+
+          let cls =
+            "flex items-center gap-3 border px-4 py-3 font-sans text-[15px] transition-colors cursor-pointer ";
+          let chipCls = "font-mono text-[11px] uppercase tracking-[0.15em] ";
+
+          if (!showResult) {
+            cls += "border-[var(--rule)] bg-[var(--ink)] text-[var(--paper)] hover:border-[var(--vermillion)]/60";
+            chipCls += "text-[var(--paper-3)]/50";
+          } else if (isPicked && isCorrect) {
+            cls += "border-[#7fa9a5] bg-[#1a4d4a]/30 text-[var(--paper)]";
+            chipCls += "text-[#7fa9a5]";
+          } else if (isPicked && !isCorrect) {
+            cls += "border-[var(--vermillion)] bg-[var(--vermillion)]/15 text-[var(--paper)]";
+            chipCls += "text-[var(--vermillion-hot)]";
+          } else if (isCorrect) {
+            cls += "border-[#7fa9a5]/60 bg-transparent text-[var(--paper-3)]/80";
+            chipCls += "text-[#7fa9a5]";
           } else {
-           
-            optionStyle += "bg-gray-100 border-gray-200 text-gray-400";
+            cls += "border-[var(--rule)] bg-transparent text-[var(--paper-3)]/40";
+            chipCls += "text-[var(--paper-3)]/30";
           }
+
           return (
             <li
               key={opt.id}
-              className={optionStyle}
+              className={cls}
               onClick={() => handleSelect(opt.id)}
               style={{ pointerEvents: selected ? "none" : "auto" }}
             >
-              {opt.text}
+              <span className={chipCls}>{label}</span>
+              <span>{opt.text}</span>
             </li>
           );
         })}
       </ul>
-      {/* Show explanation only after an option is selected */}
+
       {selected && card.explanation && (
-        <div className="mt-2 text-md font-semibold text-blue-800 bg-blue-50 p-2 rounded">
-          <b>Explanation:</b> {card.explanation}
+        <div className="mt-5 border-l-2 border-[var(--ochre)] bg-[var(--ochre)]/10 px-4 py-3">
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--ochre)]">
+            note · explanation
+          </div>
+          <div className="font-sans text-[14px] leading-[1.55] text-[var(--paper-3)]/90">
+            {card.explanation}
+          </div>
         </div>
       )}
     </div>
   );
-}; 
+};
