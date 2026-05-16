@@ -80,6 +80,14 @@ async def post_index(file: UploadFile = File(...)):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+@app.get("/graph/{doc_hash}")
+def get_graph(doc_hash: str):
+    if not artifacts_exist(doc_hash):
+        raise HTTPException(status_code=404, detail="doc_hash not indexed")
+    loaded = load_artifacts(doc_hash)
+    return loaded["graph"]
+
+
 from pydantic import BaseModel
 
 
