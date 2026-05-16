@@ -110,3 +110,19 @@ async def post_query(body: QueryBody):
             yield sse_error(str(e), partial=True)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+from app.routes.summary import summarize
+
+
+class SummaryBody(BaseModel):
+    doc_hash: str
+
+
+@app.post("/summary")
+async def post_summary(body: SummaryBody):
+    try:
+        text = await summarize(body.doc_hash)
+        return {"summary": text}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="doc_hash not indexed")
