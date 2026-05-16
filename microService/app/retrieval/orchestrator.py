@@ -102,16 +102,10 @@ async def answer(
     history: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[dict]:
     loaded = _load_artifacts_cached(doc_hash)
-
+    chroma, bm25, graph_idx = loaded["chroma"], loaded["bm25"], loaded["graph_idx"]
     chunks_by_id = _chunks_by_id(loaded)
 
     rq = await rewrite_query(query)
-
-    # Resolve objects — prefer pre-built (from cache path), fall back lazily.
-    # Using loaded.get() avoids constructing heavy objects when patched in tests.
-    chroma = loaded.get("chroma")
-    bm25 = BM25Index.load(loaded["bm25_path"])
-    graph_idx = loaded.get("graph_idx")
 
     async def safe(fn):
         try:

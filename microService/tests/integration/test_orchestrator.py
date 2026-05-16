@@ -5,14 +5,32 @@ from app.retrieval.orchestrator import answer
 from app.retrieval.rewriter import RewrittenQuery
 
 
+class _FakeBM25:
+    def search(self, q, top_k=10):
+        return [(0, 1.0), (1, 0.5)]
+
+
+class _FakeGraphIdx:
+    def match_entities(self, mentioned):
+        return []
+
+    def traverse_chunks(self, entities, hops=2):
+        return []
+
+
 @pytest.fixture
 def fake_loaded(tmp_path, monkeypatch):
+    """Mirrors what _load_artifacts_cached returns: raw paths PLUS pre-built heavy objects."""
     monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
     return {
         "graph": {"nodes": [], "edges": [], "communities": {}, "community_summaries": {}},
         "manifest": {"n_chunks": 2},
         "bm25_path": str(tmp_path / "bm25.pkl"),
         "chroma_dir": str(tmp_path / "chroma"),
+        "chroma": object(),  # opaque — _vector_search_chunks is patched
+        "bm25": _FakeBM25(),
+        "graph_idx": _FakeGraphIdx(),
+        "chunks_by_id": {0: "Chunk zero text [c0]", 1: "Chunk one text [c1]"},
     }
 
 
@@ -24,23 +42,13 @@ async def test_answer_streams_tokens_with_one_retriever_dead(fake_loaded):
     def fake_vector(*a, **k):
         raise RuntimeError("vector down")
 
-    def fake_bm25_load(path):
-        class Idx:
-            def search(self, q, top_k=10):
-                return [(0, 1.0), (1, 0.5)]
-        return Idx()
-
     async def fake_stream(*, role, messages, temperature):
         yield "Answer ", "m"
         yield "[1]", "m"
 
-    chunks_by_id = {0: "Chunk zero text [c0]", 1: "Chunk one text [c1]"}
-
     with patch("app.retrieval.orchestrator._load_artifacts_cached", return_value=fake_loaded), \
          patch("app.retrieval.orchestrator.rewrite_query", fake_rewrite), \
          patch("app.retrieval.orchestrator._vector_search_chunks", fake_vector), \
-         patch("app.retrieval.orchestrator.BM25Index.load", fake_bm25_load), \
-         patch("app.retrieval.orchestrator._chunks_by_id", return_value=chunks_by_id), \
          patch("app.retrieval.orchestrator.get_llm") as gl:
         gl.return_value.stream = fake_stream
 
