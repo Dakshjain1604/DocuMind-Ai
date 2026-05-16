@@ -78,3 +78,27 @@ async def post_index(file: UploadFile = File(...)):
             yield sse_error(str(e))
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+from pydantic import BaseModel
+
+
+class QueryBody(BaseModel):
+    doc_hash: str
+    query: str
+    history: list[dict] | None = None
+
+
+@app.post("/query")
+async def post_query(body: QueryBody):
+    if not artifacts_exist(body.doc_hash):
+        raise HTTPException(status_code=404, detail="doc_hash not indexed")
+
+    async def gen():
+        try:
+            async for ev in answer(doc_hash=body.doc_hash, query=body.query, history=body.history):
+                yield sse_event(ev["event"], ev["data"])
+        except Exception as e:
+            yield sse_error(str(e), partial=True)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
