@@ -398,6 +398,34 @@ microService/tests/
 - **Persistence scope this round:** Per-document (multi-doc is sub-project 2).
 - **Approach selected:** A — Polished hybrid GraphRAG.
 
+## Acceptance Status (sub-project 1)
+
+Implementation completed 2026-05-16 on branch `feature/hybrid-graphrag`.
+
+| Criterion | Status |
+|---|---|
+| Backend test suite | ✅ 47 passed, 1 skipped (e2e — requires real OPENAI_API_KEY) |
+| All planned routes wired | ✅ `/`, `/index`, `/query`, `/graph/{doc_hash}`, `/summary`, `/quiz` (verified via `python -c "from app.main import app"`) |
+| Server boots + guard endpoints respond | ✅ verified — 200/404/415 paths return expected JSON |
+| Frontend builds | ✅ `npm run build` clean, 15/15 pages compiled |
+| Indexing throughput (p20-page < 30s) | ⏳ pending — requires real `OPENROUTER_API_KEY` in `microService/.env` to measure |
+| Query TTFB (p50 < 1.5s, p95 < 3s) | ⏳ pending — same |
+| Citation rate ≥ 90% | ⏳ pending — same (sample 10 answers post-config) |
+| Manual frontend checklist (`frontend/README.md`) | ⏳ pending — same |
+
+### To complete acceptance
+
+1. Add `OPENROUTER_API_KEY` and the four `OPENROUTER_MODEL_*` env vars to `microService/.env` (see `.env.example`).
+2. Start backend (`cd microService && uvicorn app.main:app --port 8000`) and frontend (`cd frontend && npm run dev`).
+3. Walk the manual checklist in `frontend/README.md`.
+4. Record measured numbers below.
+
+### Measured Baseline (fill in when you run the acceptance)
+
+- Indexing (20-page fixture): TBD
+- Query TTFB: TBD / total: TBD
+- Citation rate (sampled 10 answers): TBD/10
+
 ## 9. Follow-on Work (sub-projects 2 and 3)
 
 - **Sub-project 2** — Persistent multi-doc per-user knowledge base. Adds doc-to-user mapping in MongoDB, cross-document graph merging, per-user query scope, real metrics backend.
