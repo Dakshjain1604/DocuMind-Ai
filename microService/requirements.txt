@@ -1,17 +1,27 @@
 fastapi
-uvicorn 
+uvicorn
 python-multipart
-langchain
-openai 
 python-dotenv
-langchain_core
-langchain_community
+aiofiles
+httpx
+openai>=1.0
+tiktoken
+
+# Document loading + chunking + vector store
+langchain
+langchain-core
+langchain-community
 langchain-openai
 langchain-chroma
 pypdf
-aiofiles
 unstructured
 
+# Hybrid retrieval
+rank-bm25
+networkx
+python-louvain
 
-langchain-redis 
-redis
+# Testing
+pytest
+pytest-asyncio
+respx
