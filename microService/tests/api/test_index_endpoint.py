@@ -27,7 +27,7 @@ async def test_index_rejects_unsupported_type():
 async def test_index_returns_sse_done_event_when_cached(tmp_path, monkeypatch):
     monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
 
-    async def fake_pipeline(*, file_bytes, documents):
+    async def fake_pipeline(*, file_bytes, documents, request_id=None):
         yield {"event": "done", "data": {"doc_hash": "x", "cached": False, "stats": {"n_chunks": 1}}}
 
     with patch("app.main.index_document", fake_pipeline):

@@ -12,10 +12,23 @@ type View = "quiz" | "summary" | "chat" | "graph" | "none";
 type ProgressEvent = { stamp: string; label: string };
 
 const NUMERALS = ["I", "II", "III", "IV"];
+const MAX_FILE_MB = 100;
+const ACCEPTED_EXTS = [".pdf", ".txt", ".md", ".doc", ".docx"];
 
 function shortHash(h: string | null): string {
   if (!h) return "—";
   return `${h.slice(0, 6)}…${h.slice(-4)}`;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} b`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kb`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} mb`;
+}
+
+function hasAcceptedExt(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ACCEPTED_EXTS.some((ext) => lower.endsWith(ext));
 }
 
 function nowStamp() {
@@ -24,6 +37,14 @@ function nowStamp() {
     .getMinutes()
     .toString()
     .padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
+}
+
+function formatProgressExtra(data: any): string {
+  if (data?.n_chunks) return ` · ${data.n_chunks} chunks`;
+  if (data?.sampled_from) return ` · ${data.total} planned (sampled from ${data.sampled_from})`;
+  if (data?.total) return ` · ${data.total} planned`;
+  if (data?.n) return ` · ${data.n}`;
+  return "";
 }
 
 /* ── Small inline SVG glyphs (no emojis) ─────────────────────── */
@@ -82,6 +103,7 @@ export default function Dashboard() {
   const [docHash, setDocHash] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProgressEvent[]>([]);
   const [indexing, setIndexing] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const [quiz, setQuiz] = useState<{ total_questions: number; cards: any[] } | null>(null);
   const [summary, setSummary] = useState<string>("");
@@ -156,16 +178,21 @@ export default function Dashboard() {
           } else if (evt === "error") {
             setError(data.message ?? "Indexing error");
             pushProgress(`× ${data.message ?? "error"}`);
+          } else if (evt === "graph_progress" || evt === "community_progress") {
+            // Replace last progress line in-place so the telex doesn't flood.
+            const prefix =
+              evt === "graph_progress" ? "graph extraction" : "community summaries";
+            const label = `${prefix} · ${data.done}/${data.total}`;
+            setProgress((p) => {
+              const last = p[p.length - 1];
+              if (last && last.label === label) return p;
+              if (last && last.label.startsWith(prefix + " ·")) {
+                return [...p.slice(0, -1), { stamp: nowStamp(), label }];
+              }
+              return [...p, { stamp: nowStamp(), label }];
+            });
           } else {
-            const label = evt.replace(/_/g, " ");
-            const extra = data?.n_chunks
-              ? ` · ${data.n_chunks} chunks`
-              : data?.total
-              ? ` · ${data.total} planned`
-              : data?.n
-              ? ` · ${data.n}`
-              : "";
-            pushProgress(`${label}${extra}`);
+            pushProgress(`${evt.replace(/_/g, " ")}${formatProgressExtra(data)}`);
           }
         }
       }
@@ -177,12 +204,46 @@ export default function Dashboard() {
     }
   }
 
+  function acceptFile(file: File) {
+    if (!hasAcceptedExt(file.name)) {
+      setError(`unsupported file type · ${file.name.split(".").pop()}`);
+      return;
+    }
+    const sizeMb = file.size / (1024 * 1024);
+    if (sizeMb > MAX_FILE_MB) {
+      setError(`file exceeds ${MAX_FILE_MB} mb · ${sizeMb.toFixed(1)} mb received`);
+      return;
+    }
+    setSelectedFile(file);
+    indexFile(file);
+  }
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setSelectedFile(file);
-    indexFile(file);
+    acceptFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (indexing) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) acceptFile(file);
+  }
+
+  function clearDocument() {
+    setSelectedFile(null);
+    setDocHash(null);
+    setProgress([]);
+    setError("");
+    setQuiz(null);
+    setSummary("");
+    setView("none");
+    setHighlightChunk(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   function guardHash(): boolean {
     if (!docHash) {
@@ -305,7 +366,19 @@ export default function Dashboard() {
 
         <section id="intake" className="mb-24 mt-6 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
           {/* Submit card */}
-          <div className="regmark border border-[var(--rule)] bg-[var(--ink-1)] p-8 sm:p-10">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!indexing) setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            className={`regmark border bg-[var(--ink-1)] p-8 transition-colors sm:p-10 ${
+              isDragOver
+                ? "border-[var(--vermillion)] bg-[var(--ink-2)]"
+                : "border-[var(--rule)]"
+            }`}
+          >
             <span className="rm-tr" aria-hidden />
             <span className="rm-bl" aria-hidden />
 
@@ -316,8 +389,9 @@ export default function Dashboard() {
             </h2>
 
             <p className="mt-5 max-w-md font-sans text-[15px] leading-[1.55] text-[var(--paper-3)]/65">
-              PDF, plaintext, markdown or Word. The intake clerk chunks, embeds, extracts
-              entities, and draws the graph — all streamed live to the right.
+              PDF, plaintext, markdown or Word. Drop a file anywhere on this card, or
+              choose one below. The intake clerk chunks, embeds, extracts entities and
+              draws the graph — all streamed live.
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -327,7 +401,7 @@ export default function Dashboard() {
                 className="group/up inline-flex items-center gap-3 bg-[var(--vermillion)] px-5 py-3 font-mono-cap text-[12px] text-[var(--ink)] transition-all hover:bg-[var(--vermillion-hot)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <GlyphUpload />
-                <span>choose file</span>
+                <span>{selectedFile ? "swap document" : "choose file"}</span>
               </button>
               <input
                 ref={fileInputRef}
@@ -337,8 +411,17 @@ export default function Dashboard() {
                 className="hidden"
                 aria-label="Upload document"
               />
+              {indexed && (
+                <button
+                  type="button"
+                  onClick={clearDocument}
+                  className="instrument border border-[var(--rule-hot)] px-4 py-3 font-mono-cap text-[11px] text-[var(--paper-3)]/70 hover:border-[var(--vermillion)] hover:text-[var(--vermillion)]"
+                >
+                  reset desk
+                </button>
+              )}
               <span className="font-mono-cap text-[10px] text-[var(--paper-3)]/45">
-                .pdf · .txt · .md · .docx
+                .pdf · .txt · .md · .docx · up to {MAX_FILE_MB} mb
               </span>
             </div>
 
@@ -348,8 +431,11 @@ export default function Dashboard() {
                   file
                 </span>
                 <span className="mx-3 text-[var(--vermillion)]">/</span>
-                <span className="truncate font-mono text-[12px] text-[var(--paper)]">
+                <span className="flex-1 truncate font-mono text-[12px] text-[var(--paper)]">
                   {selectedFile.name}
+                </span>
+                <span className="ml-3 shrink-0 font-mono text-[11px] tabular-nums text-[var(--paper-3)]/60">
+                  {formatSize(selectedFile.size)}
                 </span>
               </div>
             )}
@@ -372,7 +458,7 @@ export default function Dashboard() {
               </Manifest>
               <Manifest label="size">
                 <span className="text-[var(--paper)]">
-                  {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} kb` : "—"}
+                  {selectedFile ? formatSize(selectedFile.size) : "—"}
                 </span>
               </Manifest>
               <Manifest label="last event">

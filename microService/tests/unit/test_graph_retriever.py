@@ -1,4 +1,4 @@
-from app.retrieval.graph import GraphIndex
+from app.retrieval.search import GraphIndex
 
 
 SAMPLE_GRAPH = {

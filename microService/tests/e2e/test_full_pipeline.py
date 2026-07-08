@@ -37,8 +37,8 @@ async def test_index_then_query_for_known_fact(isolated_persist):
     text = FIXTURE.read_text()
     docs = [Document(page_content=text, metadata={"source": str(FIXTURE), "page": 1})]
 
-    async def fake_extract(chunks, concurrency=8):
-        return GraphBuild(
+    async def fake_extract(chunks, *, concurrency=16):
+        yield "result", GraphBuild(
             entities=[
                 {"id": "Mitochondria", "type": "Organelle", "description": "ATP producer", "source_chunks": [0]},
                 {"id": "ATP", "type": "Concept", "description": "energy currency", "source_chunks": [0]},
@@ -47,10 +47,10 @@ async def test_index_then_query_for_known_fact(isolated_persist):
                             "description": "via cellular respiration", "source_chunks": [0]}],
         )
 
-    async def fake_summaries(g, c, concurrency=8):
-        return {}
+    async def fake_summaries(g, c, *, concurrency=8, max_communities=None):
+        yield "result", {}
 
-    async def fake_rewrite(q):
+    async def fake_rewrite(q, *, n_variants=0):
         from app.retrieval.rewriter import RewrittenQuery
         return RewrittenQuery(hyde="mitochondria produce atp", keywords="mitochondria atp", entities_mentioned=["Mitochondria"])
 
@@ -59,8 +59,8 @@ async def test_index_then_query_for_known_fact(isolated_persist):
         yield "[1]", "m"
 
     doc_hash = None
-    with patch("app.indexing.pipeline.extract_graph", fake_extract), \
-         patch("app.indexing.pipeline.summarize_communities", fake_summaries):
+    with patch("app.indexing.pipeline.extract_graph_streaming", fake_extract), \
+         patch("app.indexing.pipeline.summarize_communities_streaming", fake_summaries):
         async for ev in index_document(file_bytes=text.encode(), documents=docs):
             if ev["event"] == "done":
                 doc_hash = ev["data"]["doc_hash"]

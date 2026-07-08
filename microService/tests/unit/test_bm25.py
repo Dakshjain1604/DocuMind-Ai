@@ -1,4 +1,4 @@
-from app.retrieval.bm25 import BM25Index
+from app.retrieval.search import BM25Index
 
 
 def test_bm25_ranks_relevant_doc_higher():

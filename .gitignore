@@ -6,6 +6,11 @@ package-lock.json
 dist/
 backend/config.js
 backend/.env
+.next/
+*.tsbuildinfo
+
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
@@ -37,3 +42,22 @@ frontend/node_modules
 microService/.env
 microService/app/local_chroma/
 microService/local_chroma/
+microService/test_local_chroma/
+microService/tmp/
+
+# RAG disk cache + trace DB + tuning artifacts (regenerable)
+.rag_cache/
+microService/.rag_cache/
+traces.db
+microService/tuning/.cache/
+microService/tuning/.index_cache/
+microService/tuning/results/
+microService/tuning/results.csv
+microService/tuning/results.md
+microService/tuning/best_config.json
+microService/app/config/retrieval.json
+
+# Tuning scripts' source PDF + local_chroma — run from repo root (cwd), not
+# microService/; large binary input, not source, regenerable via re-upload
+/tmp/
+/local_chroma/

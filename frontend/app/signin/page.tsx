@@ -1,63 +1,97 @@
-'use client'
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import axios from 'axios';
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { AuthShell, AuthField } from "../components/AuthShell";
 
 export default function SigninPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
+    setBusy(true);
     try {
-      await axios.post('/api/auth/signin', { email, password });
-      setSuccess('Signin successful! Redirecting...');
-      setTimeout(() => router.push('/Dashboard'), 1500);
+      await axios.post("/api/auth/signin", { email, password });
+      setSuccess("session opened · redirecting…");
+      setTimeout(() => router.push("/Dashboard"), 900);
     } catch (err: unknown) {
-      let errorMsg = 'Signin failed';
-    
-      if (axios.isAxiosError(err)) {
-        errorMsg = err.response?.data?.message || errorMsg;
-      } else if (err instanceof Error) {
-        errorMsg = err.message;
-      }
-    
-      setError(errorMsg);
+      let msg = "sign in failed";
+      if (axios.isAxiosError(err)) msg = err.response?.data?.message || msg;
+      else if (err instanceof Error) msg = err.message;
+      setError(msg);
+      setBusy(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen ">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-md text-black">
-        <h2 className="text-2xl font-bold mb-6 text-center">Sign In</h2>
-        <input
+    <AuthShell
+      kicker="entry · ingress"
+      heading="Resume the session."
+      sub="Sign in to your DocuMind workspace."
+      footer={
+        <>
+          New to DocuMind?{" "}
+          <Link
+            href="/signup"
+            className="border-b border-[var(--vermillion)] pb-0.5 text-[var(--paper)] hover:text-[var(--vermillion)]"
+          >
+            request access →
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <AuthField
+          label="email"
           type="email"
-          placeholder="Email"
+          autoComplete="email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
-          className="w-full mb-4 px-4 py-2 border rounded"
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@domain.tld"
           required
         />
-        <input
+        <AuthField
+          label="password"
           type="password"
-          placeholder="Password"
+          autoComplete="current-password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
-          className="w-full mb-4 px-4 py-2 border rounded"
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
           required
         />
-        <button type="submit" className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition">Sign In</button>
-        {error && <div className="text-red-600 mt-4 text-center">{error}</div>}
-        {success && <div className="text-green-600 mt-4 text-center">{success}</div>}
-        <div className="mt-4 text-center">
-          Don&apos;t have an account? <a href="/signup" className="text-blue-600 underline">Sign Up</a>
-        </div>
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="instrument mt-3 inline-flex items-center justify-between bg-[var(--vermillion)] px-5 py-3.5 font-mono-cap text-[12px] text-[var(--ink)] hover:bg-[var(--vermillion-hot)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span>{busy ? "dispatching…" : "open session"}</span>
+          <span className="font-sans text-[15px] leading-none">→</span>
+        </button>
+
+        {error && (
+          <p
+            role="alert"
+            className="border-l-2 border-[var(--vermillion)] bg-[var(--vermillion)]/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--vermillion-hot)]"
+          >
+            ✕ {error}
+          </p>
+        )}
+        {success && (
+          <p className="border-l-2 border-[#7fa9a5] bg-[#1a4d4a]/20 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.12em] text-[#7fa9a5]">
+            ● {success}
+          </p>
+        )}
       </form>
-    </div>
+    </AuthShell>
   );
-} 
+}

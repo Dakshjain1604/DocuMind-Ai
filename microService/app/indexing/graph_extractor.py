@@ -6,24 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 from langchain_core.documents import Document
 
-from app.core.llm import LLMClient, get_llm
-
-EXTRACTION_PROMPT = """You extract a knowledge graph from a passage of text.
-
-Return ONLY valid JSON matching this schema:
-{
-  "entities":      [{"id": "string", "type": "string", "description": "string"}],
-  "relationships": [{"src": "string", "dst": "string", "type": "string", "description": "string"}]
-}
-
-Rules:
-- entity id is the canonical name (e.g. "Mitochondria", not "the mitochondria")
-- type is one of: Person, Organization, Concept, Process, Thing, Place, Event
-- only include relationships where BOTH endpoints appear in entities
-- be conservative — only include entities/relations actually stated in the passage
-
-Passage:
-"""
+from app.config.settings import get_settings
+from app.core.llm import LLMClient, _is_retriable, get_llm
+from app.core.observability import log_event
+from app.prompts import EXTRACTION_PROMPT
 
 
 @dataclass
@@ -61,27 +47,68 @@ async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             last_err = e
             messages[0]["content"] = "You output ONLY valid JSON. No prose, no markdown fences."
+        except Exception as e:
+            # Transient transport error (timeout/429/5xx) — consume one of
+            # our 2 attempts and retry with the same messages, rather than
+            # dropping the chunk on the first blip like the JSON-repair path
+            # above intentionally does for malformed output.
+            if _is_retriable(e) and attempt == 0:
+                last_err = e
+                continue
+            raise
     raise ValueError(f"Failed to parse extraction JSON after 2 attempts: {last_err}")
 
 
-async def extract_graph(chunks: list[Document], *, concurrency: int = 8) -> GraphBuild:
-    """Run extraction concurrently across chunks. Failed chunks are skipped, not fatal."""
+async def extract_graph(chunks: list[Document], *, concurrency: int | None = None) -> GraphBuild:
+    """Run extraction concurrently. Backwards-compatible wrapper that returns
+    the final GraphBuild (no progress/warning events)."""
+    final: GraphBuild | None = None
+    async for kind, payload in extract_graph_streaming(chunks, concurrency=concurrency):
+        if kind == "result":
+            final = payload  # type: ignore[assignment]
+    assert final is not None
+    return final
+
+
+async def extract_graph_streaming(chunks: list[Document], *, concurrency: int | None = None):
+    """Streaming variant — yields ('progress', {done, total}) per completed
+    chunk, ('warning', {chunk_id, error}) as soon as a chunk's extraction
+    fails (not buried until the end), then a single ('result', GraphBuild)."""
+    if not chunks:
+        yield "result", GraphBuild()
+        return
+
+    if concurrency is None:
+        concurrency = get_settings().graph_concurrency
+
     client = get_llm()
     sem = asyncio.Semaphore(concurrency)
 
-    async def run(doc: Document) -> tuple[Document, ExtractionResult | Exception]:
+    async def run(doc: Document):
         async with sem:
             try:
-                r = await _extract_one(client, doc)
-                return doc, r
+                return doc, await _extract_one(client, doc)
             except Exception as e:
                 return doc, e
 
-    results = await asyncio.gather(*[run(c) for c in chunks])
+    tasks = [asyncio.create_task(run(c)) for c in chunks]
+    total = len(tasks)
+    done = 0
+    results: list[tuple[Document, ExtractionResult | Exception]] = []
+    for fut in asyncio.as_completed(tasks):
+        doc, r = await fut
+        results.append((doc, r))
+        done += 1
+        if isinstance(r, Exception):
+            cid = doc.metadata.get("chunk_id")
+            log_event("chunk_extraction_failed", chunk_id=cid, error_type=type(r).__name__, error=str(r))
+            yield "warning", {"chunk_id": cid, "error": str(r)}
+        yield "progress", {"done": done, "total": total}
 
     build = GraphBuild()
-    seen_entities: set[str] = set()
-    seen_rels: set[tuple[str, str, str]] = set()
+    entity_map: dict[str, dict] = {}
+    rel_map: dict[tuple[str, str, str], dict] = {}
+    
     for doc, r in results:
         cid = doc.metadata.get("chunk_id")
         if isinstance(r, Exception):
@@ -89,16 +116,25 @@ async def extract_graph(chunks: list[Document], *, concurrency: int = 8) -> Grap
             continue
         for e in r.entities:
             eid = e.get("id")
-            if not eid or eid in seen_entities:
+            if not eid:
                 continue
-            seen_entities.add(eid)
-            e["source_chunks"] = [cid]
-            build.entities.append(e)
+            if eid in entity_map:
+                if cid not in entity_map[eid]["source_chunks"]:
+                    entity_map[eid]["source_chunks"].append(cid)
+            else:
+                e["source_chunks"] = [cid]
+                entity_map[eid] = e
+                build.entities.append(e)
         for rel in r.relationships:
-            key = (rel.get("src", ""), rel.get("dst", ""), rel.get("type", ""))
-            if key in seen_rels:
-                continue
-            seen_rels.add(key)
-            rel["source_chunks"] = [cid]
-            build.relationships.append(rel)
-    return build
+            src = rel.get("src", "")
+            dst = rel.get("dst", "")
+            rtype = rel.get("type", "")
+            key = (src, dst, rtype)
+            if key in rel_map:
+                if cid not in rel_map[key]["source_chunks"]:
+                    rel_map[key]["source_chunks"].append(cid)
+            else:
+                rel["source_chunks"] = [cid]
+                rel_map[key] = rel
+                build.relationships.append(rel)
+    yield "result", build

@@ -11,19 +11,19 @@ async def test_pipeline_emits_progress_events(tmp_path, monkeypatch):
 
     docs = [Document(page_content="alpha beta gamma " * 200, metadata={"source": "x.pdf", "page": 1})]
 
-    async def fake_extract(chunks, concurrency=8):
-        return GraphBuild(
+    async def fake_extract(chunks, *, concurrency=16):
+        yield "result", GraphBuild(
             entities=[{"id": "Alpha", "type": "Concept", "description": "x", "source_chunks": [0]}],
             relationships=[],
         )
 
-    async def fake_summarize(g, c, concurrency=8):
-        return {}
+    async def fake_summarize(g, c, *, concurrency=8, max_communities=None):
+        yield "result", {}
 
     fake_chroma = type("C", (), {"persist": lambda self: None, "_collection": None})()
 
-    with patch("app.indexing.pipeline.extract_graph", fake_extract), \
-         patch("app.indexing.pipeline.summarize_communities", fake_summarize), \
+    with patch("app.indexing.pipeline.extract_graph_streaming", fake_extract), \
+         patch("app.indexing.pipeline.summarize_communities_streaming", fake_summarize), \
          patch("app.indexing.pipeline._build_chroma", return_value=fake_chroma):
         events = []
         async for ev in index_document(file_bytes=b"hello", documents=docs):
@@ -38,6 +38,53 @@ async def test_pipeline_emits_progress_events(tmp_path, monkeypatch):
     done = next(e for e in events if e["event"] == "done")
     assert "doc_hash" in done["data"]
     assert done["data"]["stats"]["n_entities"] == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_translates_parent_source_chunks_to_child_chunk_ids(tmp_path, monkeypatch):
+    """Graph extraction runs on PARENT chunks — the fake below hands back
+    source_chunks=[0] meaning "parent 0". After indexing, the persisted
+    graph.json must have translated that into parent 0's actual CHILD
+    chunk_ids (plural, since children are smaller than parents), not left
+    it as the raw parent id — otherwise GraphIndex.traverse_chunks() would
+    return ids that don't fuse with vector/BM25 rankings."""
+    monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
+    monkeypatch.setenv("RAG_CHUNK_SIZE", "1500")
+    monkeypatch.setenv("RAG_CHILD_CHUNK_SIZE", "400")
+
+    docs = [Document(page_content="alpha beta gamma " * 400, metadata={"source": "x.pdf", "page": 1})]
+
+    async def fake_extract(chunks, *, concurrency=16):
+        # `chunks` here are graph_source_docs — parent 0 must be among them
+        assert chunks[0].metadata["chunk_id"] == 0
+        yield "result", GraphBuild(
+            entities=[{"id": "Alpha", "type": "Concept", "description": "x", "source_chunks": [0]}],
+            relationships=[],
+        )
+
+    async def fake_summarize(g, c, *, concurrency=8, max_communities=None):
+        yield "result", {}
+
+    fake_chroma = type("C", (), {"persist": lambda self: None, "_collection": None})()
+
+    with patch("app.indexing.pipeline.extract_graph_streaming", fake_extract), \
+         patch("app.indexing.pipeline.summarize_communities_streaming", fake_summarize), \
+         patch("app.indexing.pipeline._build_chroma", return_value=fake_chroma):
+        events = []
+        async for ev in index_document(file_bytes=b"parent-translation-test", documents=docs):
+            events.append(ev)
+
+    done = next(e for e in events if e["event"] == "done")
+    doc_hash = done["data"]["doc_hash"]
+
+    import json
+    from app.indexing.store import doc_dir
+    graph = json.loads((doc_dir(doc_hash) / "graph.json").read_text())
+    alpha = next(n for n in graph["nodes"] if n["id"] == "Alpha")
+
+    assert alpha["source_chunks"] != [0] or len(alpha["source_chunks"]) > 1
+    assert all(isinstance(cid, int) for cid in alpha["source_chunks"])
+    assert len(alpha["source_chunks"]) > 1  # parent 0 has several child chunks
 
 
 @pytest.mark.asyncio

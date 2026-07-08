@@ -18,6 +18,15 @@ os.environ.setdefault("OPENROUTER_MODEL_RERANK", "test-model-rerank")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
 os.environ.setdefault("RAG_PERSIST_DIR", "./test_local_chroma")
 os.environ.setdefault("RAG_MAX_CACHE_DOCS", "3")
+# Default rerank off so fast unit/integration tests never trigger a real
+# cross-encoder model load/download; tests that exercise rerank modes
+# explicitly override this via monkeypatch.
+os.environ.setdefault("RAG_RERANK_MODE", "off")
+# Default caching off — tests that reuse identical (role, messages) across
+# different mocked behaviors would otherwise leak a cached result from one
+# test into another. Cache tests explicitly opt in with an isolated tmp dir.
+os.environ.setdefault("RAG_LLM_CACHE_ENABLED", "false")
+os.environ.setdefault("RAG_ANSWER_CACHE_ENABLED", "false")
 
 
 @pytest.fixture

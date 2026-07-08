@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Libre_Bodoni, Public_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { connectToMongoDB } from "@/lib/mongodb";
 
 const display = Libre_Bodoni({
   variable: "--font-display",
@@ -35,7 +34,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  connectToMongoDB();
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="antialiased">{children}</body>

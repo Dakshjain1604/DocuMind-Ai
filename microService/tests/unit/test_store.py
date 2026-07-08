@@ -35,3 +35,29 @@ def test_persist_and_load_roundtrip(tmp_path, monkeypatch):
 def test_artifacts_exist_returns_false_for_unknown_hash(tmp_path, monkeypatch):
     monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
     assert artifacts_exist("nonexistent") is False
+
+
+def test_persist_and_load_roundtrip_with_parents(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
+    h = "def" * 21 + "x"
+    graph = {"nodes": [], "edges": [], "communities": {}, "community_summaries": {}}
+    stats = {"n_chunks": 4, "n_parents": 2}
+    persist_artifacts(
+        h, graph=graph, bm25_corpus=["a", "b", "c", "d"], manifest=stats,
+        parent_chunks={0: "parent zero text", 1: "parent one text"},
+    )
+
+    loaded = load_artifacts(h)
+    assert "parents_path" in loaded
+    parents = json.loads(Path(loaded["parents_path"]).read_text())
+    assert parents == {"0": "parent zero text", "1": "parent one text"}
+
+
+def test_load_artifacts_omits_parents_path_when_not_persisted(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
+    h = "ghi" * 21 + "x"
+    graph = {"nodes": [], "edges": [], "communities": {}, "community_summaries": {}}
+    persist_artifacts(h, graph=graph, bm25_corpus=["a"], manifest={"n_chunks": 1})
+
+    loaded = load_artifacts(h)
+    assert "parents_path" not in loaded

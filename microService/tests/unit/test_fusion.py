@@ -1,4 +1,5 @@
-from app.retrieval.fusion import reciprocal_rank_fusion
+import pytest
+from app.retrieval.search import reciprocal_rank_fusion
 
 
 def test_rrf_merges_two_overlapping_lists():
@@ -35,3 +36,29 @@ def test_rrf_higher_ranks_score_higher():
     b = ["winner", "loser"]
     result = reciprocal_rank_fusion([a, b], k=60)
     assert result[0] == "winner"
+
+
+def test_rrf_none_weights_matches_equal_weighting():
+    a = ["x", "y", "z"]
+    b = ["y", "x", "w"]
+    unweighted = reciprocal_rank_fusion([a, b], k=60)
+    equal_weighted = reciprocal_rank_fusion([a, b], k=60, weights=[1.0, 1.0])
+    assert unweighted == equal_weighted
+
+
+def test_rrf_applies_weights_to_scale_contribution():
+    # "graph" ranking alone would put "only_in_graph" first, but with a low
+    # weight it should lose to an item appearing in both other rankings.
+    vec = ["a", "b"]
+    bm25 = ["a", "b"]
+    graph = ["only_in_graph"]
+    result = reciprocal_rank_fusion(
+        [vec, bm25, graph], k=60, weights=[1.0, 1.0, 0.01]
+    )
+    assert result[0] == "a"
+    assert "only_in_graph" in result
+
+
+def test_rrf_weights_length_mismatch_raises():
+    with pytest.raises(ValueError):
+        reciprocal_rank_fusion([["a"], ["b"]], weights=[1.0])
