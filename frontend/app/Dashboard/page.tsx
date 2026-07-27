@@ -20,9 +20,7 @@ import {
   Check,
   Zap,
   ShieldAlert,
-  Mic,
   Presentation,
-  Volume2,
 } from "lucide-react";
 
 import { QuizArena } from "../components/QuizArena";
@@ -46,6 +44,8 @@ import {
 import { CoverageNote, EmptyState, ErrorBanner } from "@/components/ui/ErrorBanner";
 import { readSseStream } from "@/lib/sse";
 import { formatSummaryMarkdown } from "@/lib/formatSummary";
+import { AuditPanel } from "./components/AuditPanel";
+import { AudioSlidesPanel } from "./components/AudioSlidesPanel";
 
 type View = "quiz" | "summary" | "chat" | "graph" | "masterclass" | "audit" | "audio" | "slides" | "none";
 type ProgressEvent = { stamp: string; label: string; tone?: "info" | "warn" };
@@ -959,150 +959,41 @@ export default function Dashboard() {
 
             {/* View 6: Compliance & Risk Audit */}
             {activeView === "audit" && (
-              <div className="space-y-4">
-                {isAuditLoading && (
-                  <Card className="p-12 text-center space-y-4">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-32 w-full" />
-                    <div className="font-mono text-xs text-zinc-400">
-                      Auditing document batch for compliance &amp; security risks…
-                    </div>
-                  </Card>
-                )}
-
-                {!isAuditLoading && auditItems.length > 0 && (
-                  <div className="grid gap-4">
-                    {auditItems.map((item) => (
-                      <Card key={item.id} className="p-6 space-y-3 border-l-4 border-l-amber-500">
-                        <div className="flex items-center justify-between">
-                          <Badge variant={item.severity === "high" ? "destructive" : item.severity === "medium" ? "warning" : "secondary"}>
-                            {(item.severity ?? "unknown").toUpperCase()} SEVERITY
-                          </Badge>
-                          <span className="font-mono text-xs text-zinc-400">{item.category}</span>
-                        </div>
-                        <h4 className="font-display text-lg font-bold text-white">
-                          Finding: {item.finding}
-                        </h4>
-                        <div className="rounded-xl border border-white/5 bg-zinc-900/60 p-3 font-mono text-xs text-zinc-300 space-y-1">
-                          <span className="text-emerald-400 font-semibold">Recommended Mitigation:</span>
-                          <p>{item.mitigation}</p>
-                        </div>
-                      </Card>
-                    ))}
-                    <CoverageNote coverage={studioCoverage.audit} />
-                  </div>
-                )}
-
-                {!isAuditLoading && studioErrors.audit && (
-                  <ErrorBanner
-                    message={studioErrors.audit}
-                    onRetry={() => docHash && fetchComplianceAudit(docHash)}
-                  />
-                )}
-
-                {!isAuditLoading && !studioErrors.audit && auditItems.length === 0 && (
-                  <EmptyState message="No compliance findings were identified in the sampled sections." />
-                )}
-              </div>
+              <AuditPanel
+                loading={isAuditLoading}
+                items={auditItems}
+                error={studioErrors.audit}
+                coverage={studioCoverage.audit}
+                onRetry={() => docHash && fetchComplianceAudit(docHash)}
+              />
             )}
 
             {/* View 7: Audio & Slide Deck Studio */}
             {activeView === "slides" && (
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <Button variant={audioScript ? "default" : "outline"} size="sm" disabled={isAudioLoading} onClick={() => fetchAudioBriefing(docHash)} className="gap-2">
-                    <Mic className="h-4 w-4" />
-                    <span>Generate Audio Podcast Script</span>
-                  </Button>
-                  <Button variant={slides.length > 0 ? "default" : "outline"} size="sm" disabled={isSlidesLoading} onClick={() => fetchSlideDeck(docHash)} className="gap-2">
-                    <Presentation className="h-4 w-4" />
-                    <span>Generate 5-Slide Presentation Deck</span>
-                  </Button>
-                </div>
-
-                {isAudioLoading && (
-                  <Card className="p-8 text-center space-y-3">
-                    <Skeleton className="h-24 w-full" />
-                    <div className="font-mono text-xs text-zinc-400">Synthesizing 2-host conversational podcast script…</div>
-                  </Card>
-                )}
-
-                {!isAudioLoading && studioErrors.audio && (
-                  <ErrorBanner
-                    message={studioErrors.audio}
-                    onRetry={() => docHash && fetchAudioBriefing(docHash)}
-                  />
-                )}
-
-                {audioScript && (
-                  <Card className="p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-xs text-zinc-400 font-semibold">
-                      <span className="flex items-center gap-2">
-                        <Volume2 className="h-4 w-4 text-indigo-400" />
-                        <span>Executive Podcast Script (Alex &amp; Morgan)</span>
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(audioScript);
-                          setCopiedAudio(true);
-                          setTimeout(() => setCopiedAudio(false), 2000);
-                        }}
-                      >
-                        {copiedAudio ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-zinc-400" />}
-                        <span>{copiedAudio ? "Copied" : "Copy Script"}</span>
-                      </Button>
-                    </div>
-                    <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-200 bg-zinc-900/60 p-5 rounded-xl border border-white/5">
-                      {audioScript}
-                    </div>
-                    <CoverageNote coverage={studioCoverage.audio} />
-                  </Card>
-                )}
-
-                {isSlidesLoading && (
-                  <Card className="p-8 text-center space-y-3">
-                    <Skeleton className="h-32 w-full" />
-                    <div className="font-mono text-xs text-zinc-400">Generating 5-slide executive presentation cards…</div>
-                  </Card>
-                )}
-
-                {!isSlidesLoading && studioErrors.slides && (
-                  <ErrorBanner
-                    message={studioErrors.slides}
-                    onRetry={() => docHash && fetchSlideDeck(docHash)}
-                  />
-                )}
-
-                {slides.length > 0 && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {slides.map((s: Slide) => (
-                      <Card key={s.slide} className="p-6 space-y-4 flex flex-col justify-between">
-                        <div>
-                          <Badge variant="default" className="mb-2">Slide {s.slide}</Badge>
-                          <h4 className="font-display text-lg font-bold text-white mb-3">{s.title}</h4>
-                          <ul className="space-y-2 font-sans text-sm text-zinc-300">
-                            {s.bullets?.map((b: string, i: number) => (
-                              <li key={i} className="flex items-start gap-2">
-                                <span className="text-indigo-400 font-bold">•</span>
-                                <span>{b}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        {s.speaker_notes && (
-                          <div className="pt-3 border-t border-white/10 font-mono text-xs text-zinc-400">
-                            <span className="text-zinc-500 font-semibold">Speaker Notes:</span> {s.speaker_notes}
-                          </div>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AudioSlidesPanel
+                audio={{
+                  script: audioScript,
+                  loading: isAudioLoading,
+                  error: studioErrors.audio,
+                  coverage: studioCoverage.audio,
+                  copied: copiedAudio,
+                  onGenerate: () => docHash && fetchAudioBriefing(docHash),
+                  onCopy: () => {
+                    navigator.clipboard?.writeText(audioScript);
+                    setCopiedAudio(true);
+                    setTimeout(() => setCopiedAudio(false), 2000);
+                  },
+                }}
+                slides={{
+                  items: slides,
+                  loading: isSlidesLoading,
+                  error: studioErrors.slides,
+                  coverage: studioCoverage.slides,
+                  onGenerate: () => docHash && fetchSlideDeck(docHash),
+                }}
+              />
             )}
+
           </section>
         )}
       </main>
