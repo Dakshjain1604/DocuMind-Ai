@@ -20,9 +20,13 @@ from app.indexing.graph_extractor import GraphBuild
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "short.md"
 
 
+# Embeddings moved off OpenAI to NVIDIA NIM / local HuggingFace, so the old
+# OPENAI_API_KEY gate checked a variable the code no longer reads. This runs
+# only when explicitly opted into, because it downloads or calls a real
+# embedding model:  RAG_RUN_E2E=1 ./run_tests.sh tests/e2e
 pytestmark = pytest.mark.skipif(
-    os.environ.get("OPENAI_API_KEY", "sk-test").startswith("sk-test"),
-    reason="e2e requires a real OPENAI_API_KEY for Chroma embeddings",
+    os.environ.get("RAG_RUN_E2E", "").strip().lower() not in {"1", "true", "yes"},
+    reason="set RAG_RUN_E2E=1 to run e2e (needs a real embedding model)",
 )
 
 
@@ -50,7 +54,7 @@ async def test_index_then_query_for_known_fact(isolated_persist):
     async def fake_summaries(g, c, *, concurrency=8, max_communities=None):
         yield "result", {}
 
-    async def fake_rewrite(q, *, n_variants=0):
+    async def fake_rewrite(q, *, n_variants=0, request_id=None, degraded_out=None):
         from app.retrieval.rewriter import RewrittenQuery
         return RewrittenQuery(hyde="mitochondria produce atp", keywords="mitochondria atp", entities_mentioned=["Mitochondria"])
 

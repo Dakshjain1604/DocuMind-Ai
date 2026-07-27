@@ -1,49 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DocuMind frontend
 
-## Getting Started
-
-First, run the development server:
+Next.js 15 (App Router, React 19). See the [root README](../README.md) for the
+architecture and full setup.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env      # JWT_SECRET is required
+npm run dev               # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The backend must be running on `RAG_BACKEND_URL` (default
+`http://localhost:8000`) for anything under `/Dashboard` to work.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx tsc --noEmit          # typecheck
+npm run lint
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Layout
 
-## Learn More
+```
+app/
+  page.tsx            landing page; reads live telemetry from the backend
+  Dashboard/          the application shell
+    page.tsx          composition + view switching
+    types.ts          ApiEnvelope, Coverage, AuditFinding, Slide, Citation…
+  components/         ChatStream, GraphView, QuizArena, MasterclassStudio,
+                      MermaidDiagram, CitationChip, HomeCard, AuthShell
+  api/rag/            proxy routes to the backend
+    _lib/proxy.ts     the only place that talks to RAG_BACKEND_URL
+  api/auth/           signup / signin / signout
+components/ui/        button, card, badge, input, skeleton, ErrorBanner
+lib/
+  sse.ts              SSE frame parsing + stream reader
+  formatSummary.ts    summary markdown normalisation
+  auth.ts             JWT secret resolution (throws if unset)
+  userStore.ts        accounts: Mongo when configured, JSON file otherwise
+middleware.ts         verifies the session cookie; gates /Dashboard
+```
 
-To learn more about Next.js, take a look at the following resources:
+`@/*` resolves from the `frontend/` root (see `tsconfig.json`), so
+`@/components/ui/button` is `frontend/components/ui/button.tsx` — not the
+`app/components/` directory.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Conventions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Never call the backend directly from a component.** Everything goes through
+  `app/api/rag/*`, which all route through `_lib/proxy.ts` — that is where the
+  base URL, timeouts, error envelope and SSE headers live.
+- **Read SSE with `lib/sse.ts`.** Frame-boundary handling is subtle enough that
+  it should exist once.
+- **Distinguish empty from failed.** `ErrorBanner` and `EmptyState` are separate
+  components on purpose: "no findings in this document" and "the analysis could
+  not run" must not look alike. Render `CoverageNote` alongside any generated
+  artifact so the sampling is visible.
 
-## Deploy on Vercel
+## Manual smoke test
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+With both services running and a document indexed:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. `/` — telemetry shows real numbers, or `—` with an OFFLINE badge when the
+   backend is down
+2. Navigate straight to `/Dashboard` — redirects to `/signin`
+3. Sign up, sign in
+4. Upload by drag-drop **and** by tabbing to the dropzone and pressing Enter
+5. Queue a 6th file — rejected cleanly; queue count and Process button agree
+6. Index — the progress log fills with real stage names and chunk counts, and
+   shows an amber warning if graph sampling kicks in
+7. Library shows the filename, not the hash
+8. Summary renders formatted markdown; copy and export work
+9. Query console streams; citation chips are clickable
+10. Quiz: answer three, hit Reset — all cards clickable again, no answers shown
+11. Masterclass: switch chapters rapidly — one coherent draft, not interleaved
+12. Audit / Audio / Slides — real content with the coverage caveat beneath
 
-## Manual smoke test (hybrid GraphRAG)
-
-Start backend (`cd microService && uvicorn app.main:app --port 8000`) and frontend (`npm run dev`). Then:
-
-- [ ] Upload a PDF → progress events stream (chunking → embedding → extracting graph → done) → header shows "indexed ✓"
-- [ ] Click "Generate Quiz" → quiz cards render
-- [ ] Click "Summarize" → summary renders
-- [ ] Click "Chat with AI" → ask "what produces ATP?" → answer streams token-by-token with [n] citation chips
-- [ ] Click a citation chip → "Citation clicked → chunk N" appears
-- [ ] Click "View Graph" → force-directed graph populates; click a node → highlights
-- [ ] Re-upload same file → "cached ✓" appears almost instantly
-- [ ] Network drop mid-stream → toast / error shown, partial answer preserved on screen
+**Honesty check:** point `RAG_BACKEND_URL` at a closed port and click every
+studio card. Each panel must show an error banner. None may show plausible
+content.
