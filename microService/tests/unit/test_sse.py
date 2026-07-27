@@ -1,5 +1,5 @@
 import json
-from app.core.streaming import sse_event
+from app.core.sse import sse_event
 
 
 def test_sse_event_formats_with_event_name_and_json_data():

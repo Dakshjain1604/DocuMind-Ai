@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.llm import get_llm
-from app.core.streaming import sse_event, sse_error
+from app.core.sse import sse_event, sse_error
 from app.indexing.store import load_artifacts, artifacts_exist
 from app.core.observability import record_trace, new_request_id
 from app.prompts.generation import (

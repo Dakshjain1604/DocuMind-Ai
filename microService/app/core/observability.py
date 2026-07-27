@@ -97,6 +97,9 @@ def init_trace_db(db_path: str | None = None) -> None:
         conn.close()
 
 
+_INITIALIZED_DBS: set[str] = set()
+
+
 def record_trace(
     request_id: str,
     *,
@@ -114,7 +117,13 @@ def record_trace(
     db_path: str | None = None,
 ) -> None:
     p = _trace_db_path(db_path)
-    init_trace_db(str(p))
+    # init_trace_db() runs once in the app lifespan. Calling it here meant a
+    # CREATE TABLE plus a second sqlite connection on every single write.
+    # Tests and scripts that write traces without starting the app still need
+    # the schema, so create it lazily the first time only.
+    if str(p) not in _INITIALIZED_DBS:
+        init_trace_db(str(p))
+        _INITIALIZED_DBS.add(str(p))
     conn = sqlite3.connect(p)
     try:
         conn.execute(

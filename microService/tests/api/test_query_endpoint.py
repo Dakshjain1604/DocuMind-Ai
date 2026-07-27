@@ -19,8 +19,8 @@ async def test_query_streams_when_doc_exists(monkeypatch):
         yield {"event": "token", "data": {"text": "Hello"}}
         yield {"event": "done", "data": {}}
 
-    with patch("app.main.artifacts_exist", return_value=True), \
-         patch("app.main.answer", fake_answer):
+    with patch("app.routes.deps.artifacts_exist", return_value=True), \
+         patch("app.routes.query.answer", fake_answer):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r = await client.post("/query", json={"doc_hash": "abc", "query": "what?"})

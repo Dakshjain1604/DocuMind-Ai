@@ -306,7 +306,13 @@ async def test_answer_persists_partial_trace_on_error(fake_loaded, tmp_path, mon
          patch("app.retrieval.orchestrator._bm25_search_chunks", return_value=[]), \
          patch("app.retrieval.orchestrator.get_llm") as gl:
         gl.return_value.stream = fake_stream
-        events = [e async for e in answer(doc_hash="abc", query="what is it?", request_id="trace-test-error")]
+        events = []
+        # answer() emits an `error` frame and then re-raises, so the transport
+        # can tell a real failure from a client disconnect. Collect what was
+        # streamed before the failure, then assert the trace was still written.
+        with pytest.raises(RuntimeError, match="connection dropped"):
+            async for e in answer(doc_hash="abc", query="what is it?", request_id="trace-test-error"):
+                events.append(e)
 
     assert events[-1]["event"] == "error"
     trace = get_trace("trace-test-error")

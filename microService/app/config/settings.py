@@ -136,6 +136,14 @@ class Settings:
     persist_dir: str
     max_file_mb: int
 
+    # Upload / ingestion
+    upload_dir: str
+    max_files_per_batch: int
+    allowed_extensions: tuple[str, ...]
+    tesseract_cmd: str | None
+    ocr_languages: str
+    sse_heartbeat_s: float
+
     # Observability
     trace_db_path: str
 
@@ -186,5 +194,18 @@ def get_settings() -> Settings:
         embed_device=_opt_str("RAG_EMBED_DEVICE"),
         persist_dir=persist_dir,
         max_file_mb=_int("RAG_MAX_FILE_MB", None, rj, 100),
+        upload_dir=_str("RAG_UPLOAD_DIR", None, rj, "./tmp/uploaded_files"),
+        max_files_per_batch=_int("RAG_MAX_FILES_PER_BATCH", None, rj, 5),
+        allowed_extensions=tuple(
+            e.strip().lower()
+            for e in _str("RAG_ALLOWED_EXTENSIONS", None, rj, ".pdf,.txt,.md,.docx,.doc").split(",")
+            if e.strip()
+        ),
+        # Explicit path to the tesseract binary. The OCR fallback previously
+        # hardcoded a macOS Homebrew location, which does not exist in the
+        # container image.
+        tesseract_cmd=_opt_str("RAG_TESSERACT_CMD"),
+        ocr_languages=_str("RAG_OCR_LANGUAGES", None, rj, "eng"),
+        sse_heartbeat_s=_float("RAG_SSE_HEARTBEAT_S", None, rj, 2.0),
         trace_db_path=_str("RAG_TRACE_DB_PATH", None, rj, f"{persist_dir}/traces.db"),
     )

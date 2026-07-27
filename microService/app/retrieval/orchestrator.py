@@ -166,6 +166,10 @@ def _build_context(
     return "\n\n".join(parts), citations
 
 
+_MAX_HISTORY_TURNS = 20
+_MAX_HISTORY_CHARS = 8000
+
+
 async def answer(
     *,
     doc_hash: str,
@@ -309,7 +313,19 @@ async def answer(
 
         messages = []
         if history:
-            messages.extend(history)
+            # Client-supplied turns are untrusted: only user/assistant roles are
+            # accepted, content is coerced to str and capped, and the history is
+            # truncated. Splicing it verbatim let a caller inject a system turn
+            # (overriding the answer prompt) or blow up cost with a huge array.
+            for turn in history[-_MAX_HISTORY_TURNS:]:
+                if not isinstance(turn, dict):
+                    continue
+                role = turn.get("role")
+                if role not in ("user", "assistant"):
+                    continue
+                content = str(turn.get("content", ""))[:_MAX_HISTORY_CHARS]
+                if content:
+                    messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": ANSWER_PROMPT.format(context=context, question=query)})
 
         gen_start = time.perf_counter()
@@ -343,7 +359,11 @@ async def answer(
             )
     except Exception as e:
         error_text = str(e)
+        # Emit a frame the client can render, then re-raise. Swallowing it here
+        # meant the stream ended on `error` with no `done`, and the transport's
+        # disconnect handling never ran.
         yield {"event": "error", "data": {"message": str(e), "partial": True}}
+        raise
     finally:
         answer_text = "".join(answer_parts)
         # A stage's cost_usd is None when its model is unpriced (see

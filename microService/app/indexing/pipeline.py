@@ -100,6 +100,10 @@ async def index_document(
     graph_concurrency = settings.graph_concurrency
 
     error_text: str | None = None
+    # Declared before the try so the finally block can always inspect them,
+    # even if chunking fails before the embedding task is created.
+    embed_task: asyncio.Task | None = None
+    embed_awaited = False
     try:
         yield {"event": "chunking", "data": {}}
         with timed_stage("chunking", request_id, sink=stage_records):
@@ -172,6 +176,7 @@ async def index_document(
                     build = payload
 
         yield {"event": "embedding", "data": {"status": "waiting"}}
+        embed_awaited = True
         await embed_task
         stage_records.append({
             "stage": "embedding",
@@ -246,6 +251,16 @@ async def index_document(
         error_text = str(e)
         raise
     finally:
+        # If graph extraction failed (or the client vanished) before the await
+        # above, the embedding task is still running in a thread and writing
+        # into chroma/ for a document that will never be indexed. Cancel it and
+        # retrieve any exception so asyncio does not log it as "never retrieved".
+        if embed_task is not None and not embed_awaited:
+            embed_task.cancel()
+            try:
+                await embed_task
+            except (asyncio.CancelledError, Exception):
+                pass
         record_trace(
             request_id,
             doc_hash=h,
