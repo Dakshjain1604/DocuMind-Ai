@@ -37,7 +37,6 @@ from app.indexing.store import (
 from app.retrieval.orchestrator import answer
 from app.routes.generation import (
     generate_quiz_cards,
-    summarize,
     summarize_stream,
     run_compliance_audit,
     generate_audio_briefing,
@@ -334,11 +333,10 @@ async def post_compliance_audit(body: StandardDocBody, response: Response):
 
 
 @app.post("/audio-briefing")
-async def post_audio_briefing(body: StandardDocBody):
-    if not artifacts_exist(body.doc_hash):
-        raise HTTPException(status_code=404, detail="doc_hash not indexed")
-    script = await generate_audio_briefing(body.doc_hash)
-    return {"success": True, "data": {"script": script}}
+async def post_audio_briefing(body: StandardDocBody, response: Response):
+    request_id = new_request_id()
+    response.headers["X-Request-Id"] = request_id
+    return await generate_audio_briefing(body.doc_hash, request_id=request_id)
 
 
 @app.post("/slide-deck")

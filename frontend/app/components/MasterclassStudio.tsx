@@ -9,6 +9,7 @@ import { QuizCardType } from "../Dashboard/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 interface Chapter {
   id: number;
@@ -31,9 +32,13 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   const [quizCards, setQuizCards] = useState<QuizCardType[]>([]);
   const [isQuizLoading, setIsQuizLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [chaptersLoading, setChaptersLoading] = useState<boolean>(true);
+  const [chaptersError, setChaptersError] = useState<string | null>(null);
 
   // Load chapters list
   const loadChapters = useCallback(async () => {
+    setChaptersLoading(true);
+    setChaptersError(null);
     try {
       const r = await fetch("/api/rag/chapters", {
         method: "POST",
@@ -41,12 +46,21 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
         body: JSON.stringify({ doc_hash: docHash }),
       });
       const data = await r.json();
-      if (data.success && data.data?.chapters?.length > 0) {
-        setChapters(data.data.chapters);
-        setSelectedChapter(data.data.chapters[0]);
+      if (!data.success) {
+        setChaptersError(data.error?.message ?? "Chapter extraction failed.");
+        return;
       }
-    } catch (err) {
-      console.error("Failed to load chapters:", err);
+      const list = data.data?.chapters ?? [];
+      if (list.length === 0) {
+        setChaptersError("No chapters could be identified in this document.");
+        return;
+      }
+      setChapters(list);
+      setSelectedChapter(list[0]);
+    } catch {
+      setChaptersError("Could not reach the masterclass service. Is the backend running?");
+    } finally {
+      setChaptersLoading(false);
     }
   }, [docHash]);
 
@@ -153,10 +167,11 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Custom Renderer to parse ```mermaid blocks with guaranteed diagram fallback
+  // Renders the draft, turning ```mermaid fences into diagrams.
+  // Note: when the model does not emit a diagram, none is shown. This used to
+  // synthesise a four-node flowchart out of the chapter title and present it
+  // as if it had been derived from the document.
   const renderMarkdownWithDiagrams = (text: string) => {
-    const hasMermaid = text.includes("```mermaid") || text.includes("``` mermaid");
-
     return (
       <div className="space-y-6">
         <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-indigo-300 prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-indigo-500 prose-blockquote:bg-zinc-950/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
@@ -178,21 +193,15 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
             {text}
           </Markdown>
         </article>
-
-        {!hasMermaid && selectedChapter && (
-          <div className="space-y-3 pt-4 border-t border-white/10">
-            <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-indigo-400 font-semibold">
-              <Layers className="h-4 w-4" />
-              <span>Interactive System Flowchart</span>
-            </div>
-            <MermaidDiagram
-              chart={`graph TD\n    A[Chapter Thesis: ${selectedChapter.title.replace(/[^a-zA-Z0-9 ]/g, "")}] --> B[Core Processing Mechanics]\n    B --> C[Data Storage & Integration]\n    B --> D[Security & Control Pipeline]`}
-            />
-          </div>
-        )}
       </div>
     );
   };
+
+  if (chaptersError) {
+    return (
+      <ErrorBanner message={chaptersError} onRetry={loadChapters} />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -208,7 +217,11 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
               <Badge variant="default">{chapters.length} Modules</Badge>
             </div>
             <div className="font-display text-base font-bold text-white mt-0.5">
-              {selectedChapter ? selectedChapter.title : "Loading Chapters…"}
+              {selectedChapter
+                ? selectedChapter.title
+                : chaptersLoading
+                  ? "Loading Chapters…"
+                  : "No chapters available"}
             </div>
           </div>
         </div>
@@ -220,6 +233,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
               const ch = chapters.find((c) => c.id === Number(e.target.value));
               if (ch) handleSelectChapter(ch);
             }}
+            aria-label="Select chapter"
             className="bg-zinc-900 border border-white/10 text-white font-mono text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
           >
             {chapters.map((c) => (

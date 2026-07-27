@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { findUserByEmail } from "@/lib/userStore";
-
-const JWT_SECRET = process.env.JWT_SECRET || "documind-secret-key-2026";
+import { AUTH_COOKIE, getJwtSecret } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: "7d" }
     );
 
@@ -43,7 +42,7 @@ export async function POST(req: NextRequest) {
       user: { id: user.id, email: user.email, name: user.name },
     });
 
-    res.cookies.set("token", token, {
+    res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
       path: "/",
       maxAge: 60 * 60 * 24 * 7, // 7 days

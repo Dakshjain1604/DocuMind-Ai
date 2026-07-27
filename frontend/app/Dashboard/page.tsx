@@ -34,7 +34,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { QuizCardType } from "./types";
+import {
+  AuditFinding,
+  Coverage,
+  QuizCardType,
+  Slide,
+  StudioEnvelopeData,
+  StudioKey,
+  TelemetryStats,
+} from "./types";
+import { CoverageNote, EmptyState, ErrorBanner } from "@/components/ui/ErrorBanner";
 
 type View = "quiz" | "summary" | "chat" | "graph" | "masterclass" | "audit" | "audio" | "slides" | "none";
 type ProgressEvent = { stamp: string; label: string; tone?: "info" | "warn" };
@@ -160,7 +169,7 @@ export default function Dashboard() {
   const [libraryDocs, setLibraryDocs] = useState<StoredDocument[]>([]);
 
   // System Telemetry Stats
-  const [telemetryStats, setTelemetryStats] = useState<any>(null);
+  const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
 
   // Multi-file Intake Queue Management
   const [intakeFiles, setIntakeFiles] = useState<
@@ -177,7 +186,7 @@ export default function Dashboard() {
   const [isQuizLoading, setIsQuizLoading] = useState<boolean>(false);
 
   // State for Compliance Audit
-  const [auditItems, setAuditItems] = useState<any[]>([]);
+  const [auditItems, setAuditItems] = useState<AuditFinding[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState<boolean>(false);
 
   // State for Audio Briefing
@@ -186,13 +195,17 @@ export default function Dashboard() {
   const [copiedAudio, setCopiedAudio] = useState<boolean>(false);
 
   // State for Slide Deck
-  const [slides, setSlides] = useState<any[]>([]);
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [isSlidesLoading, setIsSlidesLoading] = useState<boolean>(false);
 
   // Indexing Progress Telemetry
   const [indexing, setIndexing] = useState<boolean>(false);
   const [progressLog, setProgressLog] = useState<ProgressEvent[]>([]);
   const [intakeError, setIntakeError] = useState<string | null>(null);
+
+  // Per-panel failure + sampling disclosure for the four studio artifacts.
+  const [studioErrors, setStudioErrors] = useState<Partial<Record<StudioKey, string>>>({});
+  const [studioCoverage, setStudioCoverage] = useState<Partial<Record<StudioKey, Coverage>>>({});
 
   // Focus citation target from chat
   const [focusChunk, setFocusChunk] = useState<number | null>(null);
@@ -310,6 +323,17 @@ export default function Dashboard() {
     });
   };
 
+  // Must clear the cookie server-side. This used to be a <Link href="/signin">,
+  // which navigated away but left the session valid.
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } finally {
+      // Full reload so the middleware re-evaluates from a clean state.
+      window.location.href = "/signin";
+    }
+  };
+
   const triggerUpload = async () => {
     if (selectedFiles.length === 0) return;
     setIndexing(true);
@@ -328,6 +352,10 @@ export default function Dashboard() {
       });
 
       if (!res.ok || !res.body) {
+        setStudioErrors((prev) => ({
+          ...prev,
+          summary: `Summary request failed (HTTP ${res.status}).`,
+        }));
         const txt = await res.text().catch(() => "");
         throw new Error(txt || `Intake failed with HTTP status ${res.status}`);
       }
@@ -399,6 +427,7 @@ export default function Dashboard() {
   const fetchSummary = async (hash: string) => {
     setIsSummarizing(true);
     setSummary("");
+    setStudioErrors((prev) => ({ ...prev, summary: undefined }));
     try {
       const res = await fetch("/api/rag/summary", {
         method: "POST",
@@ -438,72 +467,82 @@ export default function Dashboard() {
           }
         }
       }
-    } catch (err) {
-      console.error("Summary stream error:", err);
+    } catch {
+      setStudioErrors((prev) => ({
+        ...prev,
+        summary: "The summary stream was interrupted. Is the backend running?",
+      }));
     } finally {
       setIsSummarizing(false);
     }
   };
 
-  const fetchQuiz = async (hash: string) => {
-    setIsQuizLoading(true);
-    setQuizCards([]);
+  /**
+   * One request path for the four studio artifacts, which were previously four
+   * byte-identical fetchers that swallowed every failure into console.error.
+   * Now that the backend no longer substitutes invented content on error, a
+   * failure has to be surfaced or the panel would just sit blank.
+   */
+  const runStudioFetch = async <T,>(
+    key: StudioKey,
+    url: string,
+    hash: string,
+    pick: (data: StudioEnvelopeData) => T,
+    apply: (value: T) => void,
+    empty: T,
+    setLoading: (v: boolean) => void
+  ) => {
+    setLoading(true);
+    apply(empty);
+    setStudioErrors((prev) => ({ ...prev, [key]: undefined }));
+    setStudioCoverage((prev) => ({ ...prev, [key]: undefined }));
     try {
-      const res = await axios.post("/api/rag/quiz", { doc_hash: hash });
-      if (res.data.success && res.data.data?.cards) {
-        setQuizCards(res.data.data.cards);
+      const res = await axios.post(url, { doc_hash: hash });
+      const body = res.data;
+      if (!body?.success) {
+        setStudioErrors((prev) => ({
+          ...prev,
+          [key]: body?.error?.message ?? "The service could not complete this request.",
+        }));
+        return;
       }
+      apply(pick(body.data ?? {}));
+      setStudioCoverage((prev) => ({ ...prev, [key]: body.data?.coverage }));
     } catch (err) {
-      console.error("Quiz fetch failed:", err);
+      setStudioErrors((prev) => ({
+        ...prev,
+        [key]: axios.isAxiosError(err)
+          ? `Request failed (${err.response?.status ?? "no response"}). Is the backend running?`
+          : "Unexpected error while contacting the service.",
+      }));
     } finally {
-      setIsQuizLoading(false);
+      setLoading(false);
     }
   };
 
-  const fetchComplianceAudit = async (hash: string) => {
-    setIsAuditLoading(true);
-    setAuditItems([]);
-    try {
-      const res = await axios.post("/api/rag/compliance-audit", { doc_hash: hash });
-      if (res.data.success && res.data.data?.audit) {
-        setAuditItems(res.data.data.audit);
-      }
-    } catch (err) {
-      console.error("Audit fetch failed:", err);
-    } finally {
-      setIsAuditLoading(false);
-    }
-  };
+  const fetchQuiz = (hash: string) =>
+    runStudioFetch<QuizCardType[]>(
+      "quiz", "/api/rag/quiz", hash,
+      (d) => (d.cards as QuizCardType[]) ?? [], setQuizCards, [], setIsQuizLoading
+    );
 
-  const fetchAudioBriefing = async (hash: string) => {
-    setIsAudioLoading(true);
-    setAudioScript("");
-    try {
-      const res = await axios.post("/api/rag/audio-briefing", { doc_hash: hash });
-      if (res.data.success && res.data.data?.script) {
-        setAudioScript(res.data.data.script);
-      }
-    } catch (err) {
-      console.error("Audio fetch failed:", err);
-    } finally {
-      setIsAudioLoading(false);
-    }
-  };
+  const fetchComplianceAudit = (hash: string) =>
+    runStudioFetch<AuditFinding[]>(
+      "audit", "/api/rag/compliance-audit", hash,
+      (d) => (d.audit as AuditFinding[]) ?? [], setAuditItems, [], setIsAuditLoading
+    );
 
-  const fetchSlideDeck = async (hash: string) => {
-    setIsSlidesLoading(true);
-    setSlides([]);
-    try {
-      const res = await axios.post("/api/rag/slide-deck", { doc_hash: hash });
-      if (res.data.success && res.data.data?.slides) {
-        setSlides(res.data.data.slides);
-      }
-    } catch (err) {
-      console.error("Slides fetch failed:", err);
-    } finally {
-      setIsSlidesLoading(false);
-    }
-  };
+  const fetchAudioBriefing = (hash: string) =>
+    runStudioFetch<string>(
+      "audio", "/api/rag/audio-briefing", hash,
+      (d) => (d.script as string) ?? "", setAudioScript, "", setIsAudioLoading
+    );
+
+  const fetchSlideDeck = (hash: string) =>
+    runStudioFetch<Slide[]>(
+      "slides", "/api/rag/slide-deck", hash,
+      (d) => (d.slides as Slide[]) ?? [], setSlides, [], setIsSlidesLoading
+    );
 
   const handleCardClick = (view: View) => {
     if (!docHash) return;
@@ -557,11 +596,9 @@ export default function Dashboard() {
                 <span>Active Batch: {shortHash(docHash)}</span>
               </div>
             )}
-            <Link href="/signin">
-              <Button variant="ghost" size="sm">
-                Sign Out
-              </Button>
-            </Link>
+            <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              Sign Out
+            </Button>
           </div>
         </div>
       </header>
@@ -578,9 +615,12 @@ export default function Dashboard() {
               </div>
               {telemetryStats && (
                 <div className="hidden sm:flex items-center gap-4 text-[10px] text-zinc-400">
-                  <span>Requests: {telemetryStats.total_requests}</span>
-                  <span>Avg Latency: {telemetryStats.avg_latency_ms}ms</span>
-                  <span>Tokens: {telemetryStats.total_tokens_in + telemetryStats.total_tokens_out}</span>
+                  <span>Requests: {telemetryStats.total_requests ?? 0}</span>
+                  <span>Avg Latency: {telemetryStats.avg_latency_ms ?? 0}ms</span>
+                  <span>
+                    Tokens:{" "}
+                    {(telemetryStats.total_tokens_in ?? 0) + (telemetryStats.total_tokens_out ?? 0)}
+                  </span>
                 </div>
               )}
             </div>
@@ -900,6 +940,13 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {!isSummarizing && studioErrors.summary && (
+                  <ErrorBanner
+                    message={studioErrors.summary}
+                    onRetry={() => docHash && fetchSummary(docHash)}
+                  />
+                )}
+
                 {summary && (
                   <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-indigo-300 prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-indigo-500 prose-blockquote:bg-zinc-900/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
                     <Markdown>{formatSummaryMarkdown(summary)}</Markdown>
@@ -935,8 +982,22 @@ export default function Dashboard() {
                   </Card>
                 )}
 
+                {!isQuizLoading && studioErrors.quiz && (
+                  <ErrorBanner
+                    message={studioErrors.quiz}
+                    onRetry={() => docHash && fetchQuiz(docHash)}
+                  />
+                )}
+
+                {!isQuizLoading && !studioErrors.quiz && quizCards.length === 0 && (
+                  <EmptyState message="No usable questions could be generated from this document." />
+                )}
+
                 {!isQuizLoading && quizCards.length > 0 && (
-                  <QuizArena cards={quizCards} />
+                  <div className="space-y-3">
+                    <QuizArena cards={quizCards} />
+                    <CoverageNote coverage={studioCoverage.quiz} />
+                  </div>
                 )}
               </div>
             )}
@@ -971,7 +1032,7 @@ export default function Dashboard() {
                       <Card key={item.id} className="p-6 space-y-3 border-l-4 border-l-amber-500">
                         <div className="flex items-center justify-between">
                           <Badge variant={item.severity === "high" ? "destructive" : item.severity === "medium" ? "warning" : "secondary"}>
-                            {item.severity.toUpperCase()} SEVERITY
+                            {(item.severity ?? "unknown").toUpperCase()} SEVERITY
                           </Badge>
                           <span className="font-mono text-xs text-zinc-400">{item.category}</span>
                         </div>
@@ -984,7 +1045,19 @@ export default function Dashboard() {
                         </div>
                       </Card>
                     ))}
+                    <CoverageNote coverage={studioCoverage.audit} />
                   </div>
+                )}
+
+                {!isAuditLoading && studioErrors.audit && (
+                  <ErrorBanner
+                    message={studioErrors.audit}
+                    onRetry={() => docHash && fetchComplianceAudit(docHash)}
+                  />
+                )}
+
+                {!isAuditLoading && !studioErrors.audit && auditItems.length === 0 && (
+                  <EmptyState message="No compliance findings were identified in the sampled sections." />
                 )}
               </div>
             )}
@@ -993,11 +1066,11 @@ export default function Dashboard() {
             {activeView === "slides" && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <Button variant={audioScript ? "default" : "outline"} size="sm" onClick={() => fetchAudioBriefing(docHash)} className="gap-2">
+                  <Button variant={audioScript ? "default" : "outline"} size="sm" disabled={isAudioLoading} onClick={() => fetchAudioBriefing(docHash)} className="gap-2">
                     <Mic className="h-4 w-4" />
                     <span>Generate Audio Podcast Script</span>
                   </Button>
-                  <Button variant={slides.length > 0 ? "default" : "outline"} size="sm" onClick={() => fetchSlideDeck(docHash)} className="gap-2">
+                  <Button variant={slides.length > 0 ? "default" : "outline"} size="sm" disabled={isSlidesLoading} onClick={() => fetchSlideDeck(docHash)} className="gap-2">
                     <Presentation className="h-4 w-4" />
                     <span>Generate 5-Slide Presentation Deck</span>
                   </Button>
@@ -1008,6 +1081,13 @@ export default function Dashboard() {
                     <Skeleton className="h-24 w-full" />
                     <div className="font-mono text-xs text-zinc-400">Synthesizing 2-host conversational podcast script…</div>
                   </Card>
+                )}
+
+                {!isAudioLoading && studioErrors.audio && (
+                  <ErrorBanner
+                    message={studioErrors.audio}
+                    onRetry={() => docHash && fetchAudioBriefing(docHash)}
+                  />
                 )}
 
                 {audioScript && (
@@ -1033,6 +1113,7 @@ export default function Dashboard() {
                     <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-200 bg-zinc-900/60 p-5 rounded-xl border border-white/5">
                       {audioScript}
                     </div>
+                    <CoverageNote coverage={studioCoverage.audio} />
                   </Card>
                 )}
 
@@ -1043,9 +1124,16 @@ export default function Dashboard() {
                   </Card>
                 )}
 
+                {!isSlidesLoading && studioErrors.slides && (
+                  <ErrorBanner
+                    message={studioErrors.slides}
+                    onRetry={() => docHash && fetchSlideDeck(docHash)}
+                  />
+                )}
+
                 {slides.length > 0 && (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {slides.map((s: any) => (
+                    {slides.map((s: Slide) => (
                       <Card key={s.slide} className="p-6 space-y-4 flex flex-col justify-between">
                         <div>
                           <Badge variant="default" className="mb-2">Slide {s.slide}</Badge>

@@ -43,18 +43,21 @@ export function AuthShell({
             {sub}
           </p>
 
+          {/* Each of these describes something the code actually does. The
+              previous copy claimed zero-knowledge encryption and SOC2/HIPAA
+              compliance, none of which is true of this system. */}
           <ul className="mt-4 grid gap-3 font-sans text-sm text-zinc-300">
             <FeatureRow
-              title="End-to-End Encrypted Storage"
-              description="Document vectors and artifacts are encrypted at rest with zero-knowledge keys."
+              title="Hybrid Retrieval Fusion"
+              description="Vector search, BM25 and knowledge-graph traversal run in parallel and are merged with reciprocal rank fusion."
             />
             <FeatureRow
               title="Passage-Level Verifiable Citations"
-              description="Every AI answer streams with direct source evidence chips linked to raw chunks."
+              description="Every answer streams with source chips linked back to the exact chunks it was built from."
             />
             <FeatureRow
-              title="SOC2 & HIPAA Compliant Architecture"
-              description="Built-in audit trails, automated risk scanning, and role-based workspace permissions."
+              title="Per-Request Trace Store"
+              description="Each request records its stage latencies, token counts and retrieved context to a queryable trace."
             />
           </ul>
         </aside>

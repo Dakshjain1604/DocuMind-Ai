@@ -4,7 +4,41 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
-export default function Home() {
+const BACKEND = process.env.RAG_BACKEND_URL ?? "http://localhost:8000";
+
+type LiveTelemetry = {
+  total_requests?: number;
+  avg_latency_ms?: number;
+};
+
+/**
+ * Real numbers from the trace store, or null when the backend is unreachable.
+ * The panel below used to hard-code its "telemetry" (a 1.4s embedding time, a
+ * "<1.8s per turn" latency) — figures that were never measured.
+ */
+async function fetchTelemetry(): Promise<LiveTelemetry | null> {
+  try {
+    const res = await fetch(`${BACKEND}/telemetry/stats`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body?.data ?? null;
+  } catch {
+    // The landing page must render with the backend down.
+    return null;
+  }
+}
+
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const telemetry = await fetchTelemetry();
+  const avgLatency =
+    telemetry?.avg_latency_ms != null ? `${(telemetry.avg_latency_ms / 1000).toFixed(2)}s` : "—";
+  const totalRequests = telemetry?.total_requests ?? 0;
+
   return (
     <div className="relative min-h-screen bg-zinc-950 text-zinc-100 overflow-x-hidden selection:bg-indigo-500/30">
       {/* ── FLOATING GLASS HEADER ─────────────────────────────── */}
@@ -85,20 +119,28 @@ export default function Home() {
                   System Architecture Telemetry
                 </span>
               </div>
-              <Badge variant="success">ACTIVE</Badge>
+              <Badge variant={telemetry ? "success" : "outline"}>
+                {telemetry ? "ACTIVE" : "OFFLINE"}
+              </Badge>
             </div>
 
+            {/* Architectural rows are statements about the design and are true
+                as written. The two measured rows come from the trace store. */}
             <div className="grid gap-3.5 font-mono text-xs">
               <SpecRow label="Retrieval Fusion" value="Vector × BM25 × Graph (RRF)" />
-              <SpecRow label="GPU Embeddings" value="nvidia/nv-embedqa-e5-v5 (1.4s)" />
-              <SpecRow label="Primary LLM" value="NVIDIA NIM · Llama 3.1 8B" />
               <SpecRow label="Graph Extraction" value="Louvain Community Detection" />
-              <SpecRow label="Streaming" value="SSE Keep-Alive Heartbeat (2s)" />
+              <SpecRow label="Streaming" value="SSE Keep-Alive Heartbeat" />
               <SpecRow label="Citations" value="Passage-Level Numbered Chips" />
+              <SpecRow label="Requests Served" value={totalRequests.toLocaleString()} />
+              <SpecRow label="Mean Latency" value={avgLatency} />
             </div>
 
             <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono text-[10px] text-zinc-500">
-              <span>Latency: &lt;1.8s per turn</span>
+              <span>
+                {telemetry
+                  ? `Measured over ${totalRequests.toLocaleString()} request${totalRequests === 1 ? "" : "s"}`
+                  : "Backend offline — no measurements available"}
+              </span>
               <span>Obsidian Zinc · MMXXVI</span>
             </div>
           </Card>
