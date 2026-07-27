@@ -3,9 +3,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight } from "lucide-react";
 import { CitationChip } from "./CitationChip";
+import { readSseStream } from "@/lib/sse";
 import { Button } from "@/components/ui/button";
+import { Citation } from "../Dashboard/types";
 
-type Citation = { n: number; chunk_id: number };
 type Turn = {
   id: string;
   question: string;
@@ -107,53 +108,23 @@ export function ChatStream({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ doc_hash: docHash, query: q }),
       });
-      if (!r.ok || !r.body) {
-        updateTurn(t.id, { busy: false, error: `request failed · ${r.status}` });
-        return;
-      }
-      const reader = r.body.getReader();
-      const dec = new TextDecoder();
-      let buffer = "";
       let acc = "";
-      let cites: Citation[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += dec.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const block of events) {
-          const lines = block.split("\n");
-          const eventLine = lines.find((l) => l.startsWith("event:"));
-          const dataLine = lines.find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-          const evt = eventLine.replace("event:", "").trim();
-          const data = JSON.parse(dataLine.replace("data:", "").trim());
+      await readSseStream(r, {
+        onError: (message) => updateTurn(t.id, { error: message, answer: acc }),
+        onEvent: (evt, data: { citations?: Citation[]; text?: string; message?: string }) => {
           if (evt === "context") {
-            cites = data.citations ?? [];
-            updateTurn(t.id, { citations: cites });
+            updateTurn(t.id, { citations: data.citations ?? [] });
           } else if (evt === "token") {
-            acc += data.text;
+            acc += data.text ?? "";
             updateTurn(t.id, { answer: acc });
           } else if (evt === "error") {
-            const errStr = String(data.message ?? "stream error");
-            if (!errStr.toLowerCase().includes("broken pipe") && !errStr.toLowerCase().includes("errno 32")) {
-              updateTurn(t.id, {
-                error: errStr,
-                answer: acc,
-              });
-            }
+            updateTurn(t.id, { error: data.message ?? "stream error", answer: acc });
           }
-        }
-      }
+        },
+      });
       updateTurn(t.id, { busy: false });
-    } catch (e: unknown) {
-      const errStr = String(e);
-      if (!errStr.toLowerCase().includes("broken pipe") && !errStr.toLowerCase().includes("errno 32")) {
-        updateTurn(t.id, { busy: false, error: errStr });
-      } else {
-        updateTurn(t.id, { busy: false });
-      }
+    } catch {
+      updateTurn(t.id, { busy: false, error: "The request could not be completed." });
     } finally {
       setBusy(false);
     }

@@ -1,23 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs";
 
-const BACKEND = process.env.RAG_BACKEND_URL ?? 'http://localhost:8000';
+import { proxyJson } from "@/app/api/rag/_lib/proxy";
 
 export async function DELETE(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ doc_hash: string }> }
 ) {
-  try {
-    const { doc_hash } = await params;
-    const res = await fetch(`${BACKEND}/documents/${encodeURIComponent(doc_hash)}`, {
-      method: "DELETE",
-      headers: { "content-type": "application/json" },
-    });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to delete document" },
-      { status: 500 }
-    );
-  }
+  const { doc_hash } = await params;
+  return proxyJson(`/documents/${encodeURIComponent(doc_hash)}`, { method: "DELETE" });
 }

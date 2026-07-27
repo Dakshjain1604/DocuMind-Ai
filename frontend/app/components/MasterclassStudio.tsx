@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { readSseStream } from "@/lib/sse";
 
 interface Chapter {
   id: number;
@@ -34,6 +35,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   const [copied, setCopied] = useState<boolean>(false);
   const [chaptersLoading, setChaptersLoading] = useState<boolean>(true);
   const [chaptersError, setChaptersError] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   // Load chapters list
   const loadChapters = useCallback(async () => {
@@ -72,6 +74,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   const fetchLearningDraft = useCallback(async (ch: Chapter, signal: AbortSignal) => {
     setIsDraftLoading(true);
     setDraftText("");
+    setDraftError(null);
     try {
       const r = await fetch("/api/rag/learning-draft", {
         method: "POST",
@@ -79,33 +82,19 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
         body: JSON.stringify({ doc_hash: docHash, chapter_id: ch.id, chapter_title: ch.title }),
         signal,
       });
-      if (!r.ok || !r.body) {
-        setIsDraftLoading(false);
-        return;
-      }
-      const reader = r.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
       let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const evs = buf.split("\n\n");
-        buf = evs.pop() ?? "";
-        for (const block of evs) {
-          const lines = block.split("\n");
-          const eventLine = lines.find((l) => l.startsWith("event:"));
-          const dataLine = lines.find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-          const evt = eventLine.replace("event:", "").trim();
-          const data = JSON.parse(dataLine.replace("data:", "").trim());
+      await readSseStream(r, {
+        signal,
+        onError: (message) => setDraftError(message),
+        onEvent: (evt, data: { text?: string; message?: string }) => {
           if (evt === "token") {
-            acc += data.text;
+            acc += data.text ?? "";
             setDraftText(acc);
+          } else if (evt === "error") {
+            setDraftError(data.message ?? "Draft generation failed.");
           }
-        }
-      }
+        },
+      });
     } catch (err) {
       // An abort is the expected outcome when the user switches chapters
       // mid-stream, not a failure worth reporting.
@@ -302,6 +291,13 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
                 Architecting visual learning draft &amp; system diagrams…
               </div>
             </div>
+          )}
+
+          {draftError && (
+            <ErrorBanner
+              message={draftError}
+              onRetry={() => selectedChapter && setSelectedChapter({ ...selectedChapter })}
+            />
           )}
 
           {draftText && renderMarkdownWithDiagrams(draftText)}

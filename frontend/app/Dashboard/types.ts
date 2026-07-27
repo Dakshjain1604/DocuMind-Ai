@@ -41,6 +41,15 @@ export interface TelemetryStats {
   total_tokens_out?: number;
 }
 
+/** A numbered source marker in a streamed answer. */
+export interface Citation {
+  n: number;
+  chunk_id: number;
+  score?: number;
+  preview?: string;
+  sources?: string[];
+}
+
 export interface QuizOptionType {
   id: string;
   text: string;

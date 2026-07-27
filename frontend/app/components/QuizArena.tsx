@@ -219,7 +219,9 @@ const QuizCardWithCallback: React.FC<{
         {card.question}
       </div>
 
-      <ul className="space-y-2.5">
+      {/* radiogroup: these were <li onClick> with no role, tabIndex or key
+          handler, so the quiz was unusable without a mouse. */}
+      <ul className="space-y-2.5" role="radiogroup" aria-label={card.question}>
         {card.options.map((opt, i) => {
           const label = labels[i] ?? String(i);
           const isPicked = selected === opt.id;
@@ -248,12 +250,22 @@ const QuizCardWithCallback: React.FC<{
           }
 
           return (
-            <li
-              key={opt.id}
-              className={cls}
-              onClick={() => handleSelect(opt.id)}
-              style={{ pointerEvents: selected ? "none" : "auto" }}
-            >
+            <li key={opt.id} role="none">
+              <div
+                role="radio"
+                aria-checked={isPicked}
+                aria-disabled={showResult}
+                tabIndex={showResult ? -1 : 0}
+                className={cls}
+                onClick={() => handleSelect(opt.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelect(opt.id);
+                  }
+                }}
+                style={{ pointerEvents: selected ? "none" : "auto" }}
+              >
               <span className={chipCls}>{label}</span>
               <span className="flex-1">{opt.text}</span>
               {showResult && isCorrect && (
@@ -266,6 +278,7 @@ const QuizCardWithCallback: React.FC<{
                   <XCircle className="h-4 w-4" /> Incorrect
                 </span>
               )}
+              </div>
             </li>
           );
         })}

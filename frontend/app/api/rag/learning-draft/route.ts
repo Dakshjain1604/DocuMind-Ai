@@ -1,16 +1,13 @@
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
-const BACKEND = process.env.RAG_BACKEND_URL ?? 'http://localhost:8000';
+import { proxyStream } from "@/app/api/rag/_lib/proxy";
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const r = await fetch(`${BACKEND}/learning-draft`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body,
-  });
-  return new Response(r.body, {
-    status: r.status,
-    headers: { 'Content-Type': r.headers.get('content-type') ?? 'text/event-stream' },
+  return proxyStream("/learning-draft", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: await req.text(),
   });
 }

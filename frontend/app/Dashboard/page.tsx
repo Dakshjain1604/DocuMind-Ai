@@ -44,6 +44,8 @@ import {
   TelemetryStats,
 } from "./types";
 import { CoverageNote, EmptyState, ErrorBanner } from "@/components/ui/ErrorBanner";
+import { readSseStream } from "@/lib/sse";
+import { formatSummaryMarkdown } from "@/lib/formatSummary";
 
 type View = "quiz" | "summary" | "chat" | "graph" | "masterclass" | "audit" | "audio" | "slides" | "none";
 type ProgressEvent = { stamp: string; label: string; tone?: "info" | "warn" };
@@ -141,27 +143,7 @@ function describeIndexEvent(evt: string, data: IndexEventData): string | null {
   }
 }
 
-function formatSummaryMarkdown(raw: string): string {
-  if (!raw) return "";
-  let text = raw;
-
-  // Strip decorative emoji the model sometimes prefixes headings with.
-  // NB: this must use \p{...} with the u flag. The previous form wrote
-  // \u1F600 etc., which JS parses as \u1F60 followed by a literal '0', making
-  // the character class a range from '0' upward — it deleted nearly all ASCII.
-  text = text.replace(/\p{Extended_Pictographic}\uFE0F?/gu, "");
-
-  text = text.replace(/^#*\s*(Executive Summary.*)$/gmi, "# $1");
-  text = text.replace(/^#*\s*(Key Takeaways.*)$/gmi, "\n---\n\n## $1");
-  text = text.replace(/^#*\s*(Section & Structural Breakdown.*)$/gmi, "\n---\n\n## $1");
-  text = text.replace(/^#*\s*(Practical Impact.*)$/gmi, "\n---\n\n## $1");
-  text = text.replace(/^>?\s*(Executive Abstract:\s*)(.*)$/gm, "> **Executive Abstract**: $2");
-
-  return text;
-}
-
 export default function Dashboard() {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [docHash, setDocHash] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<View>("none");
 
@@ -211,7 +193,7 @@ export default function Dashboard() {
   const [focusChunk, setFocusChunk] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const dropRef = useRef<HTMLDivElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Load Library Documents & Telemetry on mount
   const loadLibrary = useCallback(async () => {
@@ -300,27 +282,18 @@ export default function Dashboard() {
       return [...prev, ...newItems];
     });
 
-    setSelectedFiles((prev) => {
-      const existingNames = new Set(prev.map((p) => p.name));
-      const combined = [...prev, ...valid.filter((f) => !existingNames.has(f.name))];
-      return combined.slice(0, 5);
-    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       addFilesToQueue(Array.from(e.target.files));
     }
+    // Reset so choosing the same file again after removing it still fires.
+    e.target.value = "";
   };
 
   const removeFileFromQueue = (id: string) => {
-    setIntakeFiles((prev) => {
-      const item = prev.find((p) => p.id === id);
-      if (item) {
-        setSelectedFiles((sPrev) => sPrev.filter((f) => f.name !== item.name));
-      }
-      return prev.filter((p) => p.id !== id);
-    });
+    setIntakeFiles((prev) => prev.filter((p) => p.id !== id));
   };
 
   // Must clear the cookie server-side. This used to be a <Link href="/signin">,
@@ -335,14 +308,14 @@ export default function Dashboard() {
   };
 
   const triggerUpload = async () => {
-    if (selectedFiles.length === 0) return;
+    if (intakeFiles.length === 0) return;
     setIndexing(true);
     setIntakeError(null);
-    setProgressLog([{ stamp: nowStamp(), label: `Initiating multi-file intake batch (${selectedFiles.length} file(s))` }]);
+    setProgressLog([{ stamp: nowStamp(), label: `Initiating multi-file intake batch (${intakeFiles.length} file(s))` }]);
 
     const formData = new FormData();
-    selectedFiles.forEach((file) => {
-      formData.append("files", file);
+    intakeFiles.forEach((item) => {
+      formData.append("files", item.file);
     });
 
     try {
@@ -351,35 +324,11 @@ export default function Dashboard() {
         body: formData,
       });
 
-      if (!res.ok || !res.body) {
-        setStudioErrors((prev) => ({
-          ...prev,
-          summary: `Summary request failed (HTTP ${res.status}).`,
-        }));
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Intake failed with HTTP status ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += dec.decode(value, { stream: true });
-        const blocks = buffer.split("\n\n");
-        buffer = blocks.pop() ?? "";
-
-        for (const block of blocks) {
-          const lines = block.split("\n");
-          const eventLine = lines.find((l) => l.startsWith("event:"));
-          const dataLine = lines.find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-
-          const evt = eventLine.replace("event:", "").trim();
-          const data: IndexEventData = JSON.parse(dataLine.replace("data:", "").trim());
-
+      await readSseStream(res, {
+        onError: (message) => {
+          throw new Error(message);
+        },
+        onEvent: (evt, data: IndexEventData) => {
           if (evt === "done") {
             const hash = data.doc_hash as string;
             setDocHash(hash);
@@ -397,8 +346,8 @@ export default function Dashboard() {
               {
                 stamp: nowStamp(),
                 label: data.cached
-                  ? `Already indexed · reused cached artifacts · Hash ${shortHash(hash)}`
-                  : `Indexing complete · Hash ${shortHash(hash)}`,
+                  ? `Already indexed \u00b7 reused cached artifacts \u00b7 Hash ${shortHash(hash)}`
+                  : `Indexing complete \u00b7 Hash ${shortHash(hash)}`,
               },
             ]);
             setIntakeFiles((prev) => prev.map((item) => ({ ...item, status: "ready" })));
@@ -413,12 +362,13 @@ export default function Dashboard() {
               ]);
             }
           }
-        }
-      }
-    } catch (err: any) {
-      console.error("Upload error:", err);
-      setIntakeError(err.message || "Pipeline processing failed.");
-      setProgressLog((prev) => [...prev, { stamp: nowStamp(), label: `ERROR: ${err.message || "Pipeline error"}` }]);
+        },
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Pipeline processing failed.";
+      setIntakeError(message);
+      setProgressLog((prev) => [...prev, { stamp: nowStamp(), label: `ERROR: ${message}` }]);
     } finally {
       setIndexing(false);
     }
@@ -435,43 +385,24 @@ export default function Dashboard() {
         body: JSON.stringify({ doc_hash: hash }),
       });
 
-      if (!res.ok || !res.body) {
-        setIsSummarizing(false);
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buffer = "";
       let acc = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += dec.decode(value, { stream: true });
-        const blocks = buffer.split("\n\n");
-        buffer = blocks.pop() ?? "";
-
-        for (const block of blocks) {
-          const lines = block.split("\n");
-          const eventLine = lines.find((l) => l.startsWith("event:"));
-          const dataLine = lines.find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-
-          const evt = eventLine.replace("event:", "").trim();
-          const data = JSON.parse(dataLine.replace("data:", "").trim());
-
+      await readSseStream(res, {
+        onError: (message) =>
+          setStudioErrors((prev) => ({ ...prev, summary: message })),
+        onEvent: (evt, data: { text?: string; coverage?: Coverage; message?: string }) => {
           if (evt === "token") {
-            acc += data.text;
+            acc += data.text ?? "";
             setSummary(acc);
+          } else if (evt === "done") {
+            setStudioCoverage((prev) => ({ ...prev, summary: data.coverage }));
+          } else if (evt === "error") {
+            setStudioErrors((prev) => ({
+              ...prev,
+              summary: data.message ?? "Summary generation failed.",
+            }));
           }
-        }
-      }
-    } catch {
-      setStudioErrors((prev) => ({
-        ...prev,
-        summary: "The summary stream was interrupted. Is the backend running?",
-      }));
+        },
+      });
     } finally {
       setIsSummarizing(false);
     }
@@ -657,6 +588,7 @@ export default function Dashboard() {
                         }}
                         className="text-zinc-500 hover:text-red-400 transition-colors p-1"
                         title="Delete document"
+                          aria-label="Delete document"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -686,24 +618,35 @@ export default function Dashboard() {
           </CardHeader>
 
           <CardContent className="pt-6 space-y-6">
-            {/* Dropzone */}
-            <div
-              ref={dropRef}
+            {/* Dropzone. A real <button> rather than a <div onClick>: as a div
+                it had no role, no tabIndex and no key handler, so keyboard
+                users could not upload at all. */}
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
               onDrop={(e) => {
                 e.preventDefault();
+                setIsDragging(false);
                 if (e.dataTransfer.files?.length) {
                   addFilesToQueue(Array.from(e.dataTransfer.files));
                 }
               }}
-              className="group cursor-pointer rounded-2xl border-2 border-dashed border-white/15 bg-zinc-900/40 p-8 text-center transition-all hover:border-indigo-500/50 hover:bg-zinc-900/80"
+              className={`group w-full cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all hover:border-indigo-500/50 hover:bg-zinc-900/80 ${
+                isDragging
+                  ? "border-indigo-500 bg-zinc-900/80"
+                  : "border-white/15 bg-zinc-900/40"
+              }`}
             >
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.txt,.md,.doc,.docx"
+                accept={ACCEPTED_EXTS.join(",")}
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -714,7 +657,7 @@ export default function Dashboard() {
               <p className="mt-1 font-mono text-xs text-zinc-400">
                 Supports PDF (with OCR), TXT, Markdown, and Word Documents up to {MAX_FILE_MB}MB
               </p>
-            </div>
+            </button>
 
             {/* Queue Files List */}
             {intakeFiles.length > 0 && (
@@ -726,7 +669,6 @@ export default function Dashboard() {
                     size="sm"
                     onClick={() => {
                       setIntakeFiles([]);
-                      setSelectedFiles([]);
                     }}
                     className="h-6 px-2 text-[10px] text-zinc-500 hover:text-red-400"
                   >
@@ -746,6 +688,9 @@ export default function Dashboard() {
                         <span className="text-[10px] text-zinc-500 shrink-0">({formatSize(item.size)})</span>
                       </div>
                       <button
+                        type="button"
+                        aria-label={`Remove ${item.name} from queue`}
+                        title={`Remove ${item.name}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           removeFileFromQueue(item.id);
@@ -761,7 +706,7 @@ export default function Dashboard() {
                 <div className="pt-2 flex justify-end">
                   <Button
                     onClick={triggerUpload}
-                    disabled={indexing || selectedFiles.length === 0}
+                    disabled={indexing || intakeFiles.length === 0}
                     className="gap-2"
                   >
                     {indexing ? (
@@ -781,7 +726,7 @@ export default function Dashboard() {
             )}
 
             {intakeError && (
-              <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 font-mono text-xs text-red-400">
+              <div role="alert" aria-live="polite" className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 font-mono text-xs text-red-400">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{intakeError}</span>
               </div>
