@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight } from "lucide-react";
 import { CitationChip } from "./CitationChip";
+import { Button } from "@/components/ui/button";
 
 type Citation = { n: number; chunk_id: number };
 type Turn = {
@@ -51,6 +53,12 @@ function newTurn(question: string): Turn {
   };
 }
 
+const SUGGESTED_QUERIES = [
+  "What are the core technical concepts and methodologies described?",
+  "Summarize the key findings, metrics, and operational details.",
+  "What is the overall architecture model and structural design?",
+];
+
 export function ChatStream({
   docHash,
   onCiteClick,
@@ -61,6 +69,7 @@ export function ChatStream({
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
 
@@ -84,8 +93,8 @@ export function ChatStream({
     []
   );
 
-  const ask = useCallback(async () => {
-    const q = query.trim();
+  const askQuery = useCallback(async (qText: string) => {
+    const q = qText.trim();
     if (!q || busy) return;
     setQuery("");
     const t = newTurn(q);
@@ -127,30 +136,67 @@ export function ChatStream({
             acc += data.text;
             updateTurn(t.id, { answer: acc });
           } else if (evt === "error") {
-            updateTurn(t.id, {
-              error: data.message ?? "stream error",
-              answer: acc,
-            });
+            const errStr = String(data.message ?? "stream error");
+            if (!errStr.toLowerCase().includes("broken pipe") && !errStr.toLowerCase().includes("errno 32")) {
+              updateTurn(t.id, {
+                error: errStr,
+                answer: acc,
+              });
+            }
           }
         }
       }
       updateTurn(t.id, { busy: false });
     } catch (e: unknown) {
-      updateTurn(t.id, { busy: false, error: String(e) });
+      const errStr = String(e);
+      if (!errStr.toLowerCase().includes("broken pipe") && !errStr.toLowerCase().includes("errno 32")) {
+        updateTurn(t.id, { busy: false, error: errStr });
+      } else {
+        updateTurn(t.id, { busy: false });
+      }
     } finally {
       setBusy(false);
     }
-  }, [docHash, query, busy, updateTurn]);
+  }, [docHash, busy, updateTurn]);
+
+  const handleCopyAnswer = (turnId: string, answerText: string) => {
+    navigator.clipboard.writeText(answerText);
+    setCopiedId(turnId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const clear = useCallback(() => setTurns([]), []);
 
   return (
     <div className="space-y-6">
+      {/* Suggested Queries Chips */}
+      {turns.length === 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+            <Lightbulb className="h-3.5 w-3.5 text-amber-400" />
+            <span>Suggested Context Queries</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {SUGGESTED_QUERIES.map((sq, i) => (
+              <button
+                key={i}
+                onClick={() => askQuery(sq)}
+                disabled={busy}
+                className="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-2.5 font-mono text-xs text-zinc-300 transition-all hover:border-indigo-500/50 hover:bg-zinc-900/90 hover:text-white disabled:opacity-50 text-left"
+              >
+                <span>{sq}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-indigo-400 transition-transform group-hover:translate-x-1 shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Thread */}
       {turns.length > 0 && (
         <div
           ref={threadRef}
-          className="max-h-[58vh] space-y-7 overflow-y-auto pr-1"
+          className="max-h-[58vh] space-y-7 overflow-y-auto pr-1 scrollbar-thin"
           aria-live="polite"
         >
           {turns.map((t, i) => (
@@ -159,58 +205,65 @@ export function ChatStream({
               turn={t}
               index={i + 1}
               onCite={(cid) => onCiteClick?.(cid)}
+              onCopy={() => handleCopyAnswer(t.id, t.answer)}
+              isCopied={copiedId === t.id}
             />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
-      {turns.length === 0 && (
-        <div className="border border-dashed border-[var(--rule)] px-5 py-7 text-center font-display-italic text-[15px] text-[var(--paper-3)]/45">
-          a quiet console awaits — ask a question to begin
-        </div>
-      )}
-
       {/* Input row */}
-      <div className="flex items-stretch border border-[var(--rule)] bg-[var(--ink)]">
-        <span className="flex items-center px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--vermillion)]">
-          QRY <span className="ml-2 blink">▮</span>
-        </span>
+      <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-zinc-950/80 p-2 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center px-3 font-mono text-xs font-bold uppercase tracking-wider text-indigo-400 shrink-0">
+          <Terminal className="h-4 w-4 mr-1.5" />
+          <span>QRY</span>
+        </div>
         <input
           ref={inputRef}
-          className="flex-1 bg-transparent py-3 pr-3 font-mono text-[14px] text-[var(--paper)] placeholder:text-[var(--paper-3)]/30 focus:outline-none"
+          className="flex-1 bg-transparent py-2.5 font-mono text-sm text-white placeholder:text-zinc-500 focus:outline-none"
           placeholder={
             turns.length === 0
-              ? "ask anything · enter to dispatch"
-              : "follow up · enter to dispatch"
+              ? "Ask anything about the document… (Enter to dispatch)"
+              : "Follow-up question… (Enter to dispatch)"
           }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !busy && ask()}
+          onKeyDown={(e) => e.key === "Enter" && !busy && askQuery(query)}
           disabled={busy}
         />
-        <button
-          onClick={ask}
+        <Button
+          onClick={() => askQuery(query)}
           disabled={busy || !query.trim()}
-          className="border-l border-[var(--rule)] bg-[var(--ink-2)] px-5 font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--paper)] transition-colors hover:bg-[var(--vermillion)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[var(--ink-2)] disabled:hover:text-[var(--paper)]"
+          size="sm"
+          className="gap-2 shrink-0"
         >
-          {busy ? "··· dispatch" : "dispatch →"}
-        </button>
+          {busy ? (
+            <span>Dispatching…</span>
+          ) : (
+            <>
+              <span>Dispatch</span>
+              <Send className="h-3.5 w-3.5" />
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Console actions */}
       {turns.length > 0 && (
-        <div className="flex items-center justify-between font-mono-cap text-[10px] text-[var(--paper-3)]/45">
+        <div className="flex items-center justify-between font-mono text-xs text-zinc-500">
           <span>
             {turns.length} exchange{turns.length === 1 ? "" : "s"} on file
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={clear}
             disabled={busy}
-            className="instrument border border-[var(--rule)] px-3 py-1.5 text-[var(--paper-3)]/70 hover:border-[var(--vermillion)] hover:text-[var(--vermillion)] disabled:opacity-40"
+            className="gap-1.5 h-7 text-[11px]"
           >
-            clear console
-          </button>
+            <Trash2 className="h-3 w-3 text-zinc-400" />
+            <span>Clear Console</span>
+          </Button>
         </div>
       )}
     </div>
@@ -221,61 +274,88 @@ function TurnBlock({
   turn,
   index,
   onCite,
+  onCopy,
+  isCopied,
 }: {
   turn: Turn;
   index: number;
   onCite: (id: number) => void;
+  onCopy: () => void;
+  isCopied: boolean;
 }) {
   return (
-    <article>
+    <article className="group space-y-3">
       {/* Question line */}
-      <div className="flex items-baseline gap-3 border-b border-[var(--rule)] pb-2">
-        <span className="font-mono-cap text-[10px] text-[var(--paper-3)]/45">
-          Q · {String(index).padStart(2, "0")}
-        </span>
-        <span className="font-display-italic text-[clamp(18px,1.5vw,22px)] leading-[1.35] text-[var(--paper)]/95">
-          {turn.question}
-        </span>
+      <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-2.5">
+        <div className="flex items-baseline gap-3">
+          <span className="font-mono text-xs font-semibold text-zinc-500">
+            Q · {String(index).padStart(2, "0")}
+          </span>
+          <span className="font-display text-lg font-bold text-white">
+            {turn.question}
+          </span>
+        </div>
+
+        {turn.answer && !turn.busy && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCopy}
+            className="h-7 px-2 font-mono text-[11px] text-zinc-400 hover:text-white"
+          >
+            {isCopied ? (
+              <span className="inline-flex items-center gap-1 text-emerald-400">
+                <Check className="h-3.5 w-3.5" /> Copied
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Copy className="h-3.5 w-3.5" /> Copy
+              </span>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Citations rail */}
       {turn.citations.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 pt-1">
           {turn.citations.map((c) => (
             <span
               key={c.n}
-              className="inline-flex items-center gap-1 border border-[var(--rule)] bg-[var(--ink)] px-2 py-1 font-mono text-[10px] text-[var(--paper-3)]/80"
+              onClick={() => onCite(c.chunk_id)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 font-mono text-[10px] text-indigo-300 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/20 transition-colors"
             >
-              <span className="text-[var(--vermillion)]">
+              <span className="font-bold text-indigo-400">
                 {String(c.n).padStart(2, "0")}
               </span>
-              <span className="text-[var(--paper-3)]/40">/</span>
-              <span>chunk {c.chunk_id}</span>
+              <span className="text-zinc-500">/</span>
+              <span>Chunk {c.chunk_id}</span>
             </span>
           ))}
         </div>
       )}
 
       {/* Answer body */}
-      <div className="mt-4 border-l-2 border-[var(--vermillion)]/40 pl-5">
+      <div className="border-l-2 border-indigo-500/50 pl-4 py-1">
         {turn.answer ? (
-          <div className="whitespace-pre-wrap font-sans text-[16.5px] leading-[1.6] text-[var(--paper)]">
+          <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-200">
             {renderWithCitations(turn.answer, turn.citations, onCite)}
             {turn.busy && (
-              <span className="blink ml-1 text-[var(--vermillion)]">▮</span>
+              <span className="blink ml-1 text-indigo-400 font-mono">▮</span>
             )}
           </div>
         ) : (
-          <div className="font-sans italic text-[15px] text-[var(--paper-3)]/35">
-            {turn.busy ? "consulting passages…" : "no answer"}
+          <div className="font-sans italic text-sm text-zinc-500">
+            {turn.busy ? "Consulting GraphRAG passages…" : "No answer"}
           </div>
         )}
       </div>
 
       {turn.error && (
-        <p className="mt-3 border-l-2 border-[var(--vermillion)] bg-[var(--vermillion)]/10 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--vermillion-hot)]">
-          ✕ {turn.error}
-        </p>
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 font-mono text-xs text-red-400">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{turn.error}</span>
+        </div>
       )}
     </article>
   );

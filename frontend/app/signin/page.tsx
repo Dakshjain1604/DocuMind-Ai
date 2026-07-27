@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import { AuthShell, AuthField } from "../components/AuthShell";
+import { Button } from "@/components/ui/button";
 
 export default function SigninPage() {
   const [email, setEmail] = useState("");
@@ -21,10 +23,10 @@ export default function SigninPage() {
     setBusy(true);
     try {
       await axios.post("/api/auth/signin", { email, password });
-      setSuccess("session opened · redirecting…");
+      setSuccess("Session opened · Redirecting to studio…");
       setTimeout(() => router.push("/Dashboard"), 900);
     } catch (err: unknown) {
-      let msg = "sign in failed";
+      let msg = "Sign in failed";
       if (axios.isAxiosError(err)) msg = err.response?.data?.message || msg;
       else if (err instanceof Error) msg = err.message;
       setError(msg);
@@ -34,33 +36,34 @@ export default function SigninPage() {
 
   return (
     <AuthShell
-      kicker="entry · ingress"
-      heading="Resume the session."
-      sub="Sign in to your DocuMind workspace."
+      kicker="Ingress"
+      heading="Resume your session."
+      sub="Sign in to your DocuMind studio workspace."
       footer={
         <>
           New to DocuMind?{" "}
           <Link
             href="/signup"
-            className="border-b border-[var(--vermillion)] pb-0.5 text-[var(--paper)] hover:text-[var(--vermillion)]"
+            className="text-indigo-400 font-semibold hover:underline inline-flex items-center gap-1 ml-1"
           >
-            request access →
+            <span>Request access</span>
+            <ArrowRight className="h-3 w-3" />
           </Link>
         </>
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <AuthField
-          label="email"
+          label="Email Address"
           type="email"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@domain.tld"
+          placeholder="you@domain.com"
           required
         />
         <AuthField
-          label="password"
+          label="Password"
           type="password"
           autoComplete="current-password"
           value={password}
@@ -69,27 +72,27 @@ export default function SigninPage() {
           required
         />
 
-        <button
+        <Button
           type="submit"
           disabled={busy}
-          className="instrument mt-3 inline-flex items-center justify-between bg-[var(--vermillion)] px-5 py-3.5 font-mono-cap text-[12px] text-[var(--ink)] hover:bg-[var(--vermillion-hot)] disabled:cursor-not-allowed disabled:opacity-60"
+          size="lg"
+          className="mt-3 w-full gap-2 justify-between"
         >
-          <span>{busy ? "dispatching…" : "open session"}</span>
-          <span className="font-sans text-[15px] leading-none">→</span>
-        </button>
+          <span>{busy ? "Opening session…" : "Open Session"}</span>
+          <ArrowRight className="h-4 w-4" />
+        </Button>
 
         {error && (
-          <p
-            role="alert"
-            className="border-l-2 border-[var(--vermillion)] bg-[var(--vermillion)]/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--vermillion-hot)]"
-          >
-            ✕ {error}
-          </p>
+          <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 font-mono text-xs text-red-400">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
         {success && (
-          <p className="border-l-2 border-[#7fa9a5] bg-[#1a4d4a]/20 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.12em] text-[#7fa9a5]">
-            ● {success}
-          </p>
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 font-mono text-xs text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>{success}</span>
+          </div>
         )}
       </form>
     </AuthShell>

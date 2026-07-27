@@ -1,4 +1,4 @@
-"""OpenRouter LLM client with role-based fallback chains.
+"""Unified LLM client supporting OpenRouter and Groq with role-based fallback chains.
 
 Roles read an ordered list of model IDs from env (comma-separated).
 On 429/5xx/timeout the client walks the list. Embeddings live elsewhere
@@ -25,13 +25,54 @@ class LLMRoleNotConfigured(Exception):
 
 VALID_ROLES = {"extract", "answer", "rewrite", "rerank"}
 
+GROQ_DEFAULT_MODELS = {
+    "extract": "llama-3.1-8b-instant,llama-3.3-70b-versatile",
+    "answer": "llama-3.3-70b-versatile,deepseek-r1-distill-llama-70b",
+    "rewrite": "llama-3.1-8b-instant",
+    "rerank": "llama-3.1-8b-instant",
+}
+
+NVIDIA_DEFAULT_MODELS = {
+    "extract": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "answer": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "rewrite": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "rerank": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+}
+
+OPENROUTER_DEFAULT_MODELS = {
+    "extract": "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,openai/gpt-4o-mini",
+    "answer": "meta-llama/llama-3.3-70b-instruct:free,deepseek/deepseek-chat-v3-0324:free,openai/gpt-4o-mini",
+    "rewrite": "meta-llama/llama-3.1-8b-instruct:free",
+    "rerank": "qwen/qwen-2.5-7b-instruct:free",
+}
+
 
 def get_models_for_role(role: str) -> list[str]:
-    env_key = f"OPENROUTER_MODEL_{role.upper()}"
-    raw = os.environ.get(env_key)
-    if not raw:
-        raise LLMRoleNotConfigured(f"env var {env_key} is unset")
-    return [m.strip() for m in raw.split(",") if m.strip()]
+    settings = get_settings()
+    provider = settings.llm_provider
+
+    if provider == "groq":
+        env_key = f"GROQ_MODEL_{role.upper()}"
+        raw = os.environ.get(env_key) or GROQ_DEFAULT_MODELS.get(role)
+        if not raw:
+            raise LLMRoleNotConfigured(f"Role '{role}' is not configured for provider 'groq' (set {env_key})")
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    elif provider == "nvidia":
+        env_key = f"NVIDIA_MODEL_{role.upper()}"
+        raw = os.environ.get(env_key) or NVIDIA_DEFAULT_MODELS.get(role)
+        if not raw:
+            raise LLMRoleNotConfigured(f"Role '{role}' is not configured for provider 'nvidia' (set {env_key})")
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    else:
+        # Default to openrouter
+        env_key = f"OPENROUTER_MODEL_{role.upper()}"
+        raw = os.environ.get(env_key)
+        if not raw:
+            if role in OPENROUTER_DEFAULT_MODELS:
+                raw = OPENROUTER_DEFAULT_MODELS[role]
+            else:
+                raise LLMRoleNotConfigured(f"env var {env_key} is unset")
+        return [m.strip() for m in raw.split(",") if m.strip()]
 
 
 @dataclass
@@ -46,14 +87,14 @@ class LLMResult:
 
 def _is_retriable(err: Exception) -> bool:
     """Errors that warrant walking to the next model in the fallback chain.
-    Includes 404 (model deprecated / unavailable on OpenRouter) and 5xx
+    Includes 404 (model deprecated / unavailable on provider) and 5xx
     in addition to rate-limits / timeouts."""
     msg = str(err).lower()
     return any(
         s in msg
         for s in (
             "404", "not found", "no endpoints",
-            "429", "rate", "timeout",
+            "429", "rate", "timeout", "timed out",
             "500", "502", "503", "504",
             "model_not_found", "model not available",
         )
@@ -69,15 +110,37 @@ def _is_auth_error(err: Exception) -> bool:
 
 class LLMClient:
     def __init__(self) -> None:
-        api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError(
-                "OPENROUTER_API_KEY is not set or empty — set it in microService/.env "
-                "before starting the service."
-            )
+        settings = get_settings()
+        self.provider = settings.llm_provider
+
+        if self.provider == "groq":
+            api_key = (settings.groq_api_key or os.environ.get("GROQ_API_KEY", "")).strip()
+            if not api_key:
+                raise RuntimeError(
+                    "GROQ_API_KEY is not set or empty — set it in microService/.env "
+                    "before starting the service."
+                )
+            base_url = settings.groq_base_url
+        elif self.provider == "nvidia":
+            api_key = (settings.nvidia_api_key or os.environ.get("NVIDIA_API_KEY", "")).strip()
+            if not api_key:
+                raise RuntimeError(
+                    "NVIDIA_API_KEY is not set or empty — set it in microService/.env "
+                    "before starting the service."
+                )
+            base_url = settings.nvidia_base_url
+        else:
+            api_key = (settings.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY", "")).strip()
+            if not api_key:
+                raise RuntimeError(
+                    "OPENROUTER_API_KEY is not set or empty — set it in microService/.env "
+                    "before starting the service."
+                )
+            base_url = settings.openrouter_base_url
+
         self._client = AsyncOpenAI(
             api_key=api_key,
-            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            base_url=base_url,
             timeout=120.0,
         )
 
@@ -98,12 +161,8 @@ class LLMClient:
         cache = get_disk_cache() if settings.llm_cache_enabled else None
         cache_key = None
         if cache is not None:
-            # Keyed on the formatted content itself (not a prompt-version
-            # constant) plus the resolved model list — either the messages
-            # or the role's configured models changing busts the cache
-            # automatically (self-invalidating), so a stale completion from
-            # a since-replaced model is never served.
-            cache_key = cache.make_key("llm", role, models, messages, temperature, response_format)
+            # Keyed on provider + content + role model list
+            cache_key = cache.make_key("llm", self.provider, role, models, messages, temperature, response_format)
             cached = cache.get(cache_key)
             if cached is not None:
                 return cached
@@ -115,12 +174,11 @@ class LLMClient:
                 if response_format is not None:
                     kwargs["response_format"] = response_format
                 resp = await self._raw_chat(model=model, **kwargs)
+                if not resp.choices:
+                    raise ValueError(f"Model {model} returned empty choices list")
                 content = resp.choices[0].message.content
 
-                # Prefer provider-reported usage (OpenRouter proxies OpenAI-
-                # style `usage`); fall back to a local tiktoken estimate when
-                # absent or malformed (also handles test mocks gracefully —
-                # a MagicMock attribute is not an int, so it's ignored).
+                # Prefer provider-reported usage; fall back to tiktoken estimate
                 usage = getattr(resp, "usage", None)
                 tokens_in = getattr(usage, "prompt_tokens", None) if usage is not None else None
                 tokens_out = getattr(usage, "completion_tokens", None) if usage is not None else None
@@ -144,12 +202,12 @@ class LLMClient:
                 last_err = e
                 if _is_auth_error(e):
                     raise RuntimeError(
-                        f"OpenRouter authentication failed for model={model} — check OPENROUTER_API_KEY. "
+                        f"{self.provider.capitalize()} authentication failed for model={model} — check API key. "
                         f"Original error: {e}"
                     ) from e
                 if not _is_retriable(e) and idx == 0:
                     raise
-        raise RuntimeError(f"All models in fallback chain failed for role={role}: {last_err}")
+        raise RuntimeError(f"All models in fallback chain failed for role={role} on provider={self.provider}: {last_err}")
 
     async def stream(
         self,
@@ -168,6 +226,8 @@ class LLMClient:
                     model=model, messages=messages, temperature=temperature, stream=True,
                 )
                 async for chunk in stream:
+                    if not chunk.choices:
+                        continue
                     delta = chunk.choices[0].delta.content or ""
                     if delta:
                         yield delta, model
@@ -176,12 +236,12 @@ class LLMClient:
                 last_err = e
                 if _is_auth_error(e):
                     raise RuntimeError(
-                        f"OpenRouter authentication failed for model={model} — check OPENROUTER_API_KEY. "
+                        f"{self.provider.capitalize()} authentication failed for model={model} — check API key. "
                         f"Original error: {e}"
                     ) from e
                 if not _is_retriable(e) and idx == 0:
                     raise
-        raise RuntimeError(f"All models failed during streaming for role={role}: {last_err}")
+        raise RuntimeError(f"All models failed during streaming for role={role} on provider={self.provider}: {last_err}")
 
 
 _singleton: LLMClient | None = None
@@ -192,3 +252,4 @@ def get_llm() -> LLMClient:
     if _singleton is None:
         _singleton = LLMClient()
     return _singleton
+

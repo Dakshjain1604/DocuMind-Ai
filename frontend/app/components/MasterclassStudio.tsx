@@ -1,0 +1,312 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import Markdown from "react-markdown";
+import { BookOpen, Layers, HelpCircle, Check, Copy } from "lucide-react";
+import { MermaidDiagram } from "./MermaidDiagram";
+import { QuizArena } from "./QuizArena";
+import { QuizCardType } from "../Dashboard/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface Chapter {
+  id: number;
+  title: string;
+  summary: string;
+}
+
+interface MasterclassStudioProps {
+  docHash: string;
+}
+
+export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash }) => {
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [activeTab, setActiveTab] = useState<"draft" | "quiz">("draft");
+
+  const [draftText, setDraftText] = useState<string>("");
+  const [isDraftLoading, setIsDraftLoading] = useState<boolean>(false);
+
+  const [quizCards, setQuizCards] = useState<QuizCardType[]>([]);
+  const [isQuizLoading, setIsQuizLoading] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // Load chapters list
+  const loadChapters = useCallback(async () => {
+    try {
+      const r = await fetch("/api/rag/chapters", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ doc_hash: docHash }),
+      });
+      const data = await r.json();
+      if (data.success && data.data?.chapters?.length > 0) {
+        setChapters(data.data.chapters);
+        setSelectedChapter(data.data.chapters[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load chapters:", err);
+    }
+  }, [docHash]);
+
+  useEffect(() => {
+    loadChapters();
+  }, [loadChapters]);
+
+  // Load Learning Draft for selected chapter
+  const fetchLearningDraft = useCallback(async (ch: Chapter) => {
+    setIsDraftLoading(true);
+    setDraftText("");
+    try {
+      const r = await fetch("/api/rag/learning-draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ doc_hash: docHash, chapter_id: ch.id, chapter_title: ch.title }),
+      });
+      if (!r.ok || !r.body) {
+        setIsDraftLoading(false);
+        return;
+      }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const evs = buf.split("\n\n");
+        buf = evs.pop() ?? "";
+        for (const block of evs) {
+          const lines = block.split("\n");
+          const eventLine = lines.find((l) => l.startsWith("event:"));
+          const dataLine = lines.find((l) => l.startsWith("data:"));
+          if (!eventLine || !dataLine) continue;
+          const evt = eventLine.replace("event:", "").trim();
+          const data = JSON.parse(dataLine.replace("data:", "").trim());
+          if (evt === "token") {
+            acc += data.text;
+            setDraftText(acc);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Draft stream error:", err);
+    } finally {
+      setIsDraftLoading(false);
+    }
+  }, [docHash]);
+
+  // Load Chapter Quiz
+  const fetchChapterQuiz = useCallback(async (ch: Chapter) => {
+    setIsQuizLoading(true);
+    setQuizCards([]);
+    try {
+      const r = await fetch("/api/rag/chapter-quiz", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ doc_hash: docHash, chapter_id: ch.id, chapter_title: ch.title }),
+      });
+      const data = await r.json();
+      if (data.success && data.data?.cards) {
+        setQuizCards(data.data.cards);
+      }
+    } catch (err) {
+      console.error("Failed to load chapter quiz:", err);
+    } finally {
+      setIsQuizLoading(false);
+    }
+  }, [docHash]);
+
+  useEffect(() => {
+    if (selectedChapter) {
+      if (activeTab === "draft" && !draftText) {
+        fetchLearningDraft(selectedChapter);
+      } else if (activeTab === "quiz" && quizCards.length === 0) {
+        fetchChapterQuiz(selectedChapter);
+      }
+    }
+  }, [selectedChapter, activeTab, draftText, quizCards.length, fetchLearningDraft, fetchChapterQuiz]);
+
+  const handleSelectChapter = (ch: Chapter) => {
+    setSelectedChapter(ch);
+    setDraftText("");
+    setQuizCards([]);
+    if (activeTab === "draft") {
+      fetchLearningDraft(ch);
+    } else {
+      fetchChapterQuiz(ch);
+    }
+  };
+
+  const copyDraft = () => {
+    if (!draftText) return;
+    navigator.clipboard.writeText(draftText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Custom Renderer to parse ```mermaid blocks with guaranteed diagram fallback
+  const renderMarkdownWithDiagrams = (text: string) => {
+    const hasMermaid = text.includes("```mermaid") || text.includes("``` mermaid");
+
+    return (
+      <div className="space-y-6">
+        <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-indigo-300 prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-indigo-500 prose-blockquote:bg-zinc-950/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
+          <Markdown
+            components={{
+              code({ inline, className, children, ...props }: any) {
+                const match = /language-mermaid/.exec(className || "");
+                if (!inline && match) {
+                  return <MermaidDiagram chart={String(children).replace(/\n$/, "")} />;
+                }
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {text}
+          </Markdown>
+        </article>
+
+        {!hasMermaid && selectedChapter && (
+          <div className="space-y-3 pt-4 border-t border-white/10">
+            <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-indigo-400 font-semibold">
+              <Layers className="h-4 w-4" />
+              <span>Interactive System Flowchart</span>
+            </div>
+            <MermaidDiagram
+              chart={`graph TD\n    A[Chapter Thesis: ${selectedChapter.title.replace(/[^a-zA-Z0-9 ]/g, "")}] --> B[Core Processing Mechanics]\n    B --> C[Data Storage & Integration]\n    B --> D[Security & Control Pipeline]`}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Chapter Selection Bar */}
+      <div className="glass-panel rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-indigo-500/20 bg-zinc-950/80 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-zinc-400 font-semibold tracking-wider">
+              <span>Module Navigator</span>
+              <Badge variant="default">{chapters.length} Modules</Badge>
+            </div>
+            <div className="font-display text-base font-bold text-white mt-0.5">
+              {selectedChapter ? selectedChapter.title : "Loading Chapters…"}
+            </div>
+          </div>
+        </div>
+
+        {chapters.length > 0 && (
+          <select
+            value={selectedChapter?.id || 1}
+            onChange={(e) => {
+              const ch = chapters.find((c) => c.id === Number(e.target.value));
+              if (ch) handleSelectChapter(ch);
+            }}
+            className="bg-zinc-900 border border-white/10 text-white font-mono text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
+          >
+            {chapters.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {/* Dual Tab Switcher (Visual Draft vs Mastery Quiz) */}
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={activeTab === "draft" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("draft")}
+            className="gap-2"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>Visual Learning Draft &amp; Diagrams</span>
+          </Button>
+          <Button
+            variant={activeTab === "quiz" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("quiz")}
+            className="gap-2"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>Chapter Mastery Quiz</span>
+          </Button>
+        </div>
+
+        {activeTab === "draft" && draftText && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyDraft}
+            className="gap-1.5"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5 text-zinc-400" />
+                <span>Copy Draft</span>
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Tab 1: Visual Learning Draft */}
+      {activeTab === "draft" && (
+        <div className="space-y-4">
+          {isDraftLoading && !draftText && (
+            <div className="py-20 space-y-4">
+              <Skeleton className="h-8 w-2/3" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-48 w-full" />
+              <div className="text-center font-mono text-xs text-zinc-400 pt-2">
+                Architecting visual learning draft &amp; system diagrams…
+              </div>
+            </div>
+          )}
+
+          {draftText && renderMarkdownWithDiagrams(draftText)}
+        </div>
+      )}
+
+      {/* Tab 2: Chapter Mastery Quiz */}
+      {activeTab === "quiz" && (
+        <div className="space-y-4">
+          {isQuizLoading && (
+            <div className="py-20 space-y-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-40 w-full" />
+              <div className="text-center font-mono text-xs text-zinc-400 pt-2">
+                Generating targeted chapter mastery quiz…
+              </div>
+            </div>
+          )}
+
+          {!isQuizLoading && quizCards.length > 0 && (
+            <QuizArena cards={quizCards} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

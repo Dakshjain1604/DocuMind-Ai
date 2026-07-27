@@ -1,10 +1,5 @@
 """Observability: structured per-stage logging, token/cost accounting, and a
-queryable SQLite trace store (one row per query, GET /trace/{request_id}).
-
-SQLite rather than diskcache here on purpose — a trace wants named columns
-and future WHERE/ORDER BY queries, a different access pattern than the
-key-value blob cache in app/core/cache.py.
-"""
+queryable SQLite trace store (one row per query, GET /trace/{request_id})."""
 from __future__ import annotations
 import json
 import sqlite3
@@ -56,14 +51,10 @@ def new_request_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-# USD per 1K tokens, (input, output). Populate here as paid models are added.
 MODEL_PRICING: dict[str, tuple[float, float]] = {}
 
 
 def estimate_cost_usd(model: str, tokens_in: int, tokens_out: int) -> float | None:
-    """Real $0.0 for genuinely free (":free"-suffixed) OpenRouter models;
-    None (unknown, not zero) for any other model this project hasn't priced —
-    a paid model with no MODEL_PRICING entry must not silently report $0."""
     if model in MODEL_PRICING:
         price_in, price_out = MODEL_PRICING[model]
         return (tokens_in / 1000) * price_in + (tokens_out / 1000) * price_out
@@ -168,5 +159,46 @@ def get_trace(request_id: str, *, db_path: str | None = None) -> dict[str, Any] 
         out["context"] = json.loads(out.pop("context_json") or "[]")
         out["cache_hit"] = bool(out["cache_hit"])
         return out
+    finally:
+        conn.close()
+
+
+def get_telemetry_stats(*, db_path: str | None = None) -> dict[str, Any]:
+    p = _trace_db_path(db_path)
+    if not p.exists():
+        return {
+            "total_requests": 0,
+            "total_tokens_in": 0,
+            "total_tokens_out": 0,
+            "total_cost_usd": 0.0,
+            "avg_latency_ms": 0.0,
+            "error_count": 0,
+            "recent_traces": [],
+        }
+    init_trace_db(str(p))
+    conn = sqlite3.connect(p)
+    conn.row_factory = sqlite3.Row
+    try:
+        total_requests = conn.execute("SELECT COUNT(*) FROM traces").fetchone()[0]
+        total_tokens_in = conn.execute("SELECT SUM(total_tokens_in) FROM traces").fetchone()[0] or 0
+        total_tokens_out = conn.execute("SELECT SUM(total_tokens_out) FROM traces").fetchone()[0] or 0
+        total_cost = conn.execute("SELECT SUM(total_cost_usd) FROM traces").fetchone()[0] or 0.0
+        avg_latency = conn.execute("SELECT AVG(total_latency_ms) FROM traces").fetchone()[0] or 0.0
+        error_count = conn.execute("SELECT COUNT(*) FROM traces WHERE error IS NOT NULL").fetchone()[0]
+
+        recent = conn.execute(
+            "SELECT request_id, doc_hash, query, created_at, total_latency_ms, error FROM traces ORDER BY created_at DESC LIMIT 10"
+        ).fetchall()
+        recent_list = [dict(r) for r in recent]
+
+        return {
+            "total_requests": total_requests,
+            "total_tokens_in": total_tokens_in,
+            "total_tokens_out": total_tokens_out,
+            "total_cost_usd": round(total_cost, 4),
+            "avg_latency_ms": round(avg_latency, 1),
+            "error_count": error_count,
+            "recent_traces": recent_list,
+        }
     finally:
         conn.close()

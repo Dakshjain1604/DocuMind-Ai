@@ -171,7 +171,7 @@ def generate_markdown(results: list[dict], output_path: Path) -> None:
         weights = f"{result.get('vector_weight', 1.0):.1f}/{result.get('bm25_weight', 1.0):.1f}/{result.get('graph_weight', 1.0):.1f}"
 
         # Highlight if this is the best
-        marker = " 🏆" if i == 1 else ""
+        marker = " [BEST]" if i == 1 else ""
 
         lines.append(
             f"| {i}{marker} | "
@@ -332,7 +332,7 @@ def write_app_config(best_config: dict, output_path: Path) -> None:
 def print_winner(best_config: dict, results: list[dict]) -> None:
     """Print winning configuration to stdout."""
     print("\n" + "=" * 70)
-    print("🏆 WINNING CONFIGURATION")
+    print("WINNING CONFIGURATION")
     print("=" * 70)
     
     print(f"\nChunk Size: {best_config['chunk_size']}")

@@ -55,14 +55,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({ card }) => {
             cls += "border-[var(--rule)] bg-[var(--ink)] text-[var(--paper)] hover:border-[var(--vermillion)]/60";
             chipCls += "text-[var(--paper-3)]/50";
           } else if (isPicked && isCorrect) {
-            cls += "border-[#7fa9a5] bg-[#1a4d4a]/30 text-[var(--paper)]";
-            chipCls += "text-[#7fa9a5]";
+            cls += "border-[#10b981] bg-[#10b981]/15 text-[var(--paper)]";
+            chipCls += "text-[#10b981]";
           } else if (isPicked && !isCorrect) {
             cls += "border-[var(--vermillion)] bg-[var(--vermillion)]/15 text-[var(--paper)]";
             chipCls += "text-[var(--vermillion-hot)]";
           } else if (isCorrect) {
-            cls += "border-[#7fa9a5]/60 bg-transparent text-[var(--paper-3)]/80";
-            chipCls += "text-[#7fa9a5]";
+            cls += "border-[#10b981]/60 bg-transparent text-[var(--paper-3)]/80";
+            chipCls += "text-[#10b981]";
           } else {
             cls += "border-[var(--rule)] bg-transparent text-[var(--paper-3)]/40";
             chipCls += "text-[var(--paper-3)]/30";

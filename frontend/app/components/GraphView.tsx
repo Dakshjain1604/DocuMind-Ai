@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { Network, AlertCircle, RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
@@ -14,16 +16,16 @@ type GraphData = {
   community_summaries?: Record<string, string>;
 };
 
-// Atlas palette for community groups — picked, not random
+// Atlas palette for community groups
 const COMMUNITY_COLORS = [
-  "#d4351c", // vermillion
-  "#b88a2b", // ochre
-  "#7fa9a5", // teal-pale
-  "#e6dbc3", // paper-warm
-  "#9ea66d", // moss
-  "#c98a73", // terra
-  "#5d7a8c", // slate
-  "#d39656", // copper
+  "#6366f1", // indigo
+  "#38bdf8", // cyan
+  "#10b981", // emerald
+  "#fbbf24", // amber
+  "#c084fc", // purple
+  "#f472b6", // pink
+  "#a855f7", // violet
+  "#34d399", // teal
 ];
 
 export function GraphView({
@@ -44,7 +46,7 @@ export function GraphView({
       try {
         const r = await fetch(`/api/rag/graph/${encodeURIComponent(docHash)}`);
         if (!r.ok) {
-          setErr(`GRAPH FETCH FAILED · ${r.status}`);
+          setErr(`Graph fetch failed · status ${r.status}`);
           return;
         }
         const j = (await r.json()) as GraphData;
@@ -66,22 +68,25 @@ export function GraphView({
 
   if (err) {
     return (
-      <div className="border-l-2 border-[var(--vermillion)] bg-[var(--vermillion)]/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--vermillion-hot)]">
-        ✕ {err}
+      <div className="flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 font-mono text-xs text-red-400">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        <span>{err}</span>
       </div>
     );
   }
   if (!data) {
     return (
-      <div className="flex h-[520px] items-center justify-center border border-[var(--rule)] bg-[var(--ink)] font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--paper-3)]/40">
-        <span className="ticker-dot mr-2 text-[var(--vermillion)]">●</span> loading plate · graph
+      <div className="flex h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-zinc-950/80 font-mono text-xs uppercase tracking-wider text-zinc-400">
+        <RefreshCw className="mr-2 h-4 w-4 animate-spin text-indigo-400" />
+        <span>Loading Knowledge Atlas Graph…</span>
       </div>
     );
   }
   if (data.nodes.length === 0) {
     return (
-      <div className="flex h-[520px] items-center justify-center border border-[var(--rule)] bg-[var(--ink)] font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--paper-3)]/40">
-        ∅ no entities extracted from this document
+      <div className="flex h-[520px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-950/80 font-mono text-xs uppercase tracking-wider text-zinc-500">
+        <Network className="h-8 w-8 text-zinc-600 mb-1" />
+        <span>No knowledge entities extracted from this document</span>
       </div>
     );
   }
@@ -96,35 +101,35 @@ export function GraphView({
   };
 
   return (
-    <div className="regmark border border-[var(--rule)] bg-[var(--ink)]">
-      <span className="rm-tr" />
-      <span className="rm-bl" />
-
-      {/* Cartouche header */}
-      <div className="flex items-center justify-between border-b border-[var(--rule)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--paper-3)]/60">
-        <span>PLATE · IV · KNOWLEDGE CARTOGRAPHY</span>
+    <div className="glass-panel rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl backdrop-blur-xl space-y-4 p-4">
+      {/* Header bar */}
+      <div className="flex flex-wrap items-center justify-between border-b border-white/10 pb-3 font-mono text-xs uppercase tracking-wider text-zinc-400">
+        <div className="flex items-center gap-2">
+          <Network className="h-4 w-4 text-indigo-400" />
+          <span className="font-semibold text-white">Knowledge Cartography Atlas</span>
+        </div>
         {stats && (
-          <span className="tabular-nums">
-            <span className="text-[var(--vermillion)]">{stats.n}</span> NODES ·
-            <span className="ml-1 text-[var(--vermillion)]">{stats.e}</span> EDGES ·
-            <span className="ml-1 text-[var(--vermillion)]">{stats.c}</span> COMMUNITIES
-          </span>
+          <div className="flex items-center gap-2">
+            <Badge variant="default">{stats.n} Nodes</Badge>
+            <Badge variant="secondary">{stats.e} Edges</Badge>
+            <Badge variant="outline">{stats.c} Communities</Badge>
+          </div>
         )}
       </div>
 
-      <div style={{ height: 520 }}>
+      <div style={{ height: 480 }} className="rounded-xl overflow-hidden bg-zinc-950/60 border border-white/5">
         <ForceGraph2D
           graphData={fgData}
           backgroundColor="rgba(0,0,0,0)"
           nodeLabel="label"
           nodeRelSize={4}
-          linkColor={() => "rgba(245, 239, 230, 0.16)"}
-          linkWidth={0.6}
+          linkColor={() => "rgba(255, 255, 255, 0.12)"}
+          linkWidth={0.8}
           nodeCanvasObject={(node: any, ctx, scale) => {
             const isHi = highlightNode === node.id;
             const r = isHi ? 8 : 5;
             const color = isHi
-              ? "#f5efe6"
+              ? "#ffffff"
               : COMMUNITY_COLORS[(node.group as number) % COMMUNITY_COLORS.length];
 
             ctx.beginPath();
@@ -136,15 +141,15 @@ export function GraphView({
             if (isHi) {
               ctx.beginPath();
               ctx.arc(node.x ?? 0, node.y ?? 0, r + 4, 0, 2 * Math.PI);
-              ctx.strokeStyle = "#ff4422";
-              ctx.lineWidth = 1.2 / scale;
+              ctx.strokeStyle = "#818cf8";
+              ctx.lineWidth = 1.5 / scale;
               ctx.stroke();
             }
 
             if (scale > 1.2 || isHi) {
               const fontSize = isHi ? 11 / scale : 9 / scale;
               ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
-              ctx.fillStyle = "#e6dbc3";
+              ctx.fillStyle = "#fafafa";
               ctx.textBaseline = "middle";
               ctx.fillText(String(node.label ?? ""), (node.x ?? 0) + r + 4, node.y ?? 0);
             }
@@ -155,20 +160,20 @@ export function GraphView({
 
       {/* Legend */}
       {data.community_summaries && Object.keys(data.community_summaries).length > 0 && (
-        <div className="border-t border-[var(--rule)] px-4 py-3">
-          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--paper-3)]/50">
-            ── communities · legend
+        <div className="border-t border-white/10 pt-3 space-y-2">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+            Sub-Graph Communities Legend
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {Object.entries(data.community_summaries).map(([cid, summary]) => {
               const color = COMMUNITY_COLORS[Number(cid) % COMMUNITY_COLORS.length];
               return (
-                <div key={cid} className="flex items-start gap-2">
+                <div key={cid} className="flex items-start gap-2.5 rounded-xl border border-white/5 bg-zinc-900/40 p-2.5">
                   <span
-                    className="mt-1 inline-block h-2 w-2 shrink-0"
+                    className="mt-1 inline-block h-2.5 w-2.5 rounded-full shrink-0"
                     style={{ background: color }}
                   />
-                  <p className="font-sans text-[13px] leading-[1.5] text-[var(--paper-3)]/80">
+                  <p className="font-sans text-xs leading-relaxed text-zinc-300">
                     {summary}
                   </p>
                 </div>

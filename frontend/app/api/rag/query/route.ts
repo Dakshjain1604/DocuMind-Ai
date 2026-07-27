@@ -1,4 +1,6 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 const BACKEND = process.env.RAG_BACKEND_URL ?? 'http://localhost:8000';
 
@@ -12,8 +14,10 @@ export async function POST(req: Request) {
   return new Response(upstream.body, {
     status: upstream.status,
     headers: {
-      'Content-Type': upstream.headers.get('content-type') ?? 'text/event-stream',
+      'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }

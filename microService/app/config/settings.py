@@ -82,6 +82,15 @@ def _resolve_rerank_mode(json_data: dict) -> str:
 
 @dataclass(frozen=True)
 class Settings:
+    # LLM Provider
+    llm_provider: str  # openrouter | groq | nvidia
+    openrouter_api_key: str | None
+    openrouter_base_url: str
+    groq_api_key: str | None
+    groq_base_url: str
+    nvidia_api_key: str | None
+    nvidia_base_url: str
+
     # Chunking. RAG_CHUNK_SIZE/OVERLAP are the "parent" size for hierarchical
     # (small-to-big) chunking; RAG_CHILD_CHUNK_* is the small retrieval unit.
     chunk_size: int
@@ -134,12 +143,19 @@ def get_settings() -> Settings:
     rj = _load_retrieval_json()
     persist_dir = _str("RAG_PERSIST_DIR", None, rj, "./local_chroma")
     return Settings(
+        llm_provider=_str("LLM_PROVIDER", None, rj, "openrouter").lower().strip(),
+        openrouter_api_key=_opt_str("OPENROUTER_API_KEY"),
+        openrouter_base_url=_str("OPENROUTER_BASE_URL", None, rj, "https://openrouter.ai/api/v1"),
+        groq_api_key=_opt_str("GROQ_API_KEY"),
+        groq_base_url=_str("GROQ_BASE_URL", None, rj, "https://api.groq.com/openai/v1"),
+        nvidia_api_key=_opt_str("NVIDIA_API_KEY"),
+        nvidia_base_url=_str("NVIDIA_BASE_URL", None, rj, "https://integrate.api.nvidia.com/v1"),
         chunk_size=_int("RAG_CHUNK_SIZE", "chunk_size", rj, 1500),
         chunk_overlap=_int("RAG_CHUNK_OVERLAP", "chunk_overlap", rj, 200),
         child_chunk_size=_int("RAG_CHILD_CHUNK_SIZE", "child_chunk_size", rj, 400),
         child_chunk_overlap=_int("RAG_CHILD_CHUNK_OVERLAP", "child_chunk_overlap", rj, 50),
-        max_graph_chunks=_int("RAG_MAX_GRAPH_CHUNKS", "max_graph_chunks", rj, 60),
-        graph_concurrency=_int("RAG_GRAPH_CONCURRENCY", None, rj, 16),
+        max_graph_chunks=_int("RAG_MAX_GRAPH_CHUNKS", "max_graph_chunks", rj, 25),
+        graph_concurrency=_int("RAG_GRAPH_CONCURRENCY", None, rj, 5),
         max_community_summaries=_int("RAG_MAX_COMMUNITY_SUMMARIES", "max_community_summaries", rj, 30),
         min_nodes_for_communities=_int("RAG_MIN_NODES_FOR_COMMUNITIES", None, rj, 5),
         per_retriever_top_k=_int("RAG_PER_RETRIEVER_TOP_K", "per_retriever_top_k", rj, 10),

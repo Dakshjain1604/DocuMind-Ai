@@ -1,16 +1,14 @@
-// app/api/auth/signin/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { connectToMongoDB } from "@/lib/mongodb";
-import User from "@/models/userModel"; 
-const JWT_SECRET=process.env.JWT_SECRET || "changeme";
-export async function POST(req: NextRequest) {
-  await connectToMongoDB();
+import { findUserByEmail } from "@/lib/userStore";
 
+const JWT_SECRET = process.env.JWT_SECRET || "documind-secret-key-2026";
+
+export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
-    console.log(email,password)
+
     if (!email || !password) {
       return NextResponse.json(
         { message: "Email and password are required." },
@@ -18,41 +16,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ email });
-    console.log(user)
+    const user = await findUserByEmail(email);
     if (!user) {
       return NextResponse.json(
-        { message: "Invalid credentials." },
+        { message: "Invalid email or password." },
         { status: 401 }
       );
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
-
     if (!isPasswordCorrect) {
       return NextResponse.json(
-        { message: "Invalid credentials." },
+        { message: "Invalid email or password." },
         { status: 401 }
       );
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "7d",
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    const res = NextResponse.json({
+      message: "Signin successful.",
+      user: { id: user.id, email: user.email, name: user.name },
     });
 
-    const res = NextResponse.json({ message: "Signin successful." });
     res.cookies.set("token", token, {
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 1 , // 1 hour
-      secure: true,
-      sameSite: "none",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
     });
+
     return res;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Signin error:", error);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: error?.message || "Internal server error during signin." },
       { status: 500 }
     );
   }

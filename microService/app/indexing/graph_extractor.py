@@ -33,30 +33,32 @@ async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
     last_err: Exception | None = None
     for attempt in range(2):
         try:
-            result = await client.complete(
-                role="extract",
-                messages=messages,
-                temperature=0.0,
-                response_format={"type": "json_object"},
+            result = await asyncio.wait_for(
+                client.complete(
+                    role="extract",
+                    messages=messages,
+                    temperature=0.0,
+                    response_format={"type": "json_object"},
+                ),
+                timeout=5.0,
             )
             data = json.loads(result.content)
             return ExtractionResult(
                 entities=data.get("entities", []),
                 relationships=data.get("relationships", []),
             )
+        except asyncio.TimeoutError:
+            log_event("chunk_extraction_timeout", chunk_id=doc.metadata.get("chunk_id"))
+            return ExtractionResult(entities=[], relationships=[])
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             last_err = e
             messages[0]["content"] = "You output ONLY valid JSON. No prose, no markdown fences."
         except Exception as e:
-            # Transient transport error (timeout/429/5xx) — consume one of
-            # our 2 attempts and retry with the same messages, rather than
-            # dropping the chunk on the first blip like the JSON-repair path
-            # above intentionally does for malformed output.
             if _is_retriable(e) and attempt == 0:
                 last_err = e
                 continue
-            raise
-    raise ValueError(f"Failed to parse extraction JSON after 2 attempts: {last_err}")
+            return ExtractionResult(entities=[], relationships=[])
+    return ExtractionResult(entities=[], relationships=[])
 
 
 async def extract_graph(chunks: list[Document], *, concurrency: int | None = None) -> GraphBuild:

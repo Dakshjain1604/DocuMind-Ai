@@ -1,262 +1,187 @@
 import Link from "next/link";
-
-/* ───────────────────────────────────────────────────────────────
-   Landing — editorial atlas, professional & minimal.
-   Restrained sibling of the Dashboard hero. Bodoni statement,
-   monospace metadata, vermillion as the only chromatic accent.
-   ─────────────────────────────────────────────────────────────── */
+import { ArrowRight, Cpu, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 export default function Home() {
   return (
-    <div className="relative min-h-screen">
-      {/* ── MASTHEAD ─────────────────────────────────────────── */}
-      <header className="border-b border-[var(--rule)]">
-        <div className="mx-auto flex max-w-[1380px] items-center justify-between px-6 py-5 sm:px-12">
-          <div className="flex items-baseline gap-5">
-            <span className="font-display text-[20px] tracking-[-0.01em] text-[var(--paper)]">
-              Docu<span className="font-display-italic text-[var(--vermillion)]">·</span>Mind
+    <div className="relative min-h-screen bg-zinc-950 text-zinc-100 overflow-x-hidden selection:bg-indigo-500/30">
+      {/* ── FLOATING GLASS HEADER ─────────────────────────────── */}
+      <header className="fixed top-4 inset-x-0 z-50 mx-auto max-w-6xl px-4">
+        <div className="glass-panel rounded-2xl flex items-center justify-between px-6 py-3.5 shadow-2xl backdrop-blur-xl border border-white/10 bg-zinc-950/70">
+          <div className="flex items-center gap-3">
+            <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="font-display text-xl font-bold tracking-tight text-white">
+              Docu<span className="gradient-accent-text">Mind</span>
             </span>
-            <span className="hidden font-mono-cap text-[10px] text-[var(--paper-3)]/45 md:inline">
-              hybrid graphrag · vol. i · no. 01
-            </span>
+            <Badge variant="secondary" className="hidden sm:inline-flex">
+              GraphRAG v2.4
+            </Badge>
           </div>
 
-          <nav className="flex items-center gap-2">
-            <Link
-              href="/signin"
-              className="instrument px-4 py-2 font-mono-cap text-[11px] text-[var(--paper-3)]/75 hover:text-[var(--paper)]"
-            >
-              sign in
+          <nav className="flex items-center gap-3">
+            <Link href="/signin">
+              <Button variant="ghost" size="sm">
+                Sign In
+              </Button>
             </Link>
-            <Link
-              href="/signup"
-              className="instrument border border-[var(--paper)] bg-[var(--paper)] px-4 py-2 font-mono-cap text-[11px] text-[var(--ink)] hover:bg-[var(--vermillion)] hover:border-[var(--vermillion)] hover:text-[var(--ink)]"
-            >
-              get started →
+            <Link href="/Dashboard">
+              <Button size="sm" className="gap-2">
+                <span>Launch Studio</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
             </Link>
           </nav>
         </div>
       </header>
 
-      {/* ── HERO ─────────────────────────────────────────────── */}
-      <main className="mx-auto max-w-[1380px] px-6 sm:px-12">
-        <section className="grid items-end gap-12 pt-20 pb-24 lg:grid-cols-[1.5fr_1fr] lg:pt-28 lg:pb-28">
-          <div>
-            <div
-              className="reveal mb-7 inline-flex items-center gap-3 border border-[var(--rule)] px-3 py-1.5 font-mono-cap text-[10px] text-[var(--paper-3)]/65"
-              style={{ animationDelay: "60ms" }}
-            >
-              <span className="ticker-dot text-[var(--vermillion)]">●</span>
-              vector × bm25 × knowledge graph
-            </div>
+      {/* ── HERO SECTION ─────────────────────────────────────── */}
+      <main className="mx-auto max-w-6xl px-6 pt-32 pb-24 sm:px-8 lg:pt-40 lg:pb-32 space-y-28">
+        <section className="grid items-center gap-12 lg:grid-cols-[1.3fr_1fr]">
+          <div className="space-y-8">
+            <Badge variant="default" className="gap-2 px-4 py-1.5 text-xs">
+              <Cpu className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Hybrid Vector × BM25 × Knowledge Graph Engine</span>
+            </Badge>
 
-            <h1
-              className="reveal display-xl text-[var(--paper)]"
-              style={{ animationDelay: "120ms" }}
-            >
-              Read documents
-              <br />
-              the way a cartographer
-              <br />
-              reads <span className="font-display-italic text-[var(--vermillion)]">a continent.</span>
+            <h1 className="display-xl font-bold tracking-tight text-white">
+              Read documents with <br />
+              <span className="gradient-accent-text">cartographic precision.</span>
             </h1>
 
-            <p
-              className="reveal mt-7 max-w-[58ch] font-display-italic text-[clamp(18px,1.6vw,22px)] leading-[1.45] text-[var(--paper-3)]/85"
-              style={{ animationDelay: "260ms" }}
-            >
-              DocuMind extracts the entities of a document, draws their relationships,
-              and answers questions with citations you can trace back to the source.
+            <p className="max-w-[56ch] font-sans text-lg leading-relaxed text-zinc-300">
+              DocuMind extracts knowledge entities, draws Louvain community relationships,
+              and streams answers backed by verifiable passage-level citations.
             </p>
 
-            <div
-              className="reveal mt-9 flex flex-wrap items-center gap-3"
-              style={{ animationDelay: "380ms" }}
-            >
-              <Link
-                href="/signup"
-                className="instrument inline-flex items-center gap-3 bg-[var(--vermillion)] px-6 py-3.5 font-mono-cap text-[12px] text-[var(--ink)] hover:bg-[var(--vermillion-hot)]"
-              >
-                begin a session
-                <span className="font-sans text-[16px] leading-none">→</span>
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <Link href="/Dashboard">
+                <Button size="lg" className="gap-2 text-sm shadow-xl shadow-indigo-600/30">
+                  <span>Launch Studio Workspace</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </Link>
-              <Link
-                href="/signin"
-                className="instrument inline-flex items-center gap-3 border border-[var(--rule-hot)] px-6 py-3.5 font-mono-cap text-[12px] text-[var(--paper)] hover:border-[var(--paper)]"
-              >
-                sign in
+              <Link href="/signin">
+                <Button variant="outline" size="lg" className="text-sm">
+                  Sign In
+                </Button>
               </Link>
-              <span className="ml-1 font-mono-cap text-[10px] text-[var(--paper-3)]/45">
-                pdf · txt · md · docx · up to 100 mb
+              <span className="font-mono text-xs text-zinc-500 w-full sm:w-auto">
+                PDF · TXT · MD · DOCX · Multi-File Intake
               </span>
             </div>
           </div>
 
-          {/* Spec panel — small typographic facts */}
-          <aside
-            className="reveal regmark border border-[var(--rule)] bg-[var(--ink-1)] p-7"
-            style={{ animationDelay: "500ms" }}
-          >
-            <span className="rm-tr" aria-hidden />
-            <span className="rm-bl" aria-hidden />
-            <div className="mb-5 flex items-baseline justify-between border-b border-[var(--rule)] pb-3 font-mono-cap text-[10px] text-[var(--paper-3)]/55">
-              <span>specimen sheet</span>
-              <span className="text-[var(--vermillion)]">·</span>
+          {/* Telemetry Specimen Card */}
+          <Card className="p-7 space-y-6 relative overflow-hidden group">
+            <div className="absolute -top-24 -right-24 h-48 w-48 bg-indigo-500/15 rounded-full blur-3xl group-hover:bg-indigo-500/25 transition-all" />
+
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="font-mono text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center gap-1.5">
+                  <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                  System Architecture Telemetry
+                </span>
+              </div>
+              <Badge variant="success">ACTIVE</Badge>
             </div>
 
-            <dl className="grid gap-y-3 font-mono text-[11px] tabular-nums">
-              <Spec label="retrieval" value="vector × bm25 × graph" />
-              <Spec label="fusion" value="reciprocal rank · k=60" />
-              <Spec label="embeddings" value="bge-small · local" />
-              <Spec label="reasoning" value="openrouter · multi-model" />
-              <Spec label="streaming" value="server-sent events" />
-              <Spec label="citations" value="passage-level · numbered" />
-            </dl>
-
-            <div className="mt-6 border-t border-[var(--rule)] pt-5 font-mono-cap text-[10px] text-[var(--paper-3)]/45">
-              composed in ink &amp; paper · mmxxvi
+            <div className="grid gap-3.5 font-mono text-xs">
+              <SpecRow label="Retrieval Fusion" value="Vector × BM25 × Graph (RRF)" />
+              <SpecRow label="GPU Embeddings" value="nvidia/nv-embedqa-e5-v5 (1.4s)" />
+              <SpecRow label="Primary LLM" value="NVIDIA NIM · Llama 3.1 8B" />
+              <SpecRow label="Graph Extraction" value="Louvain Community Detection" />
+              <SpecRow label="Streaming" value="SSE Keep-Alive Heartbeat (2s)" />
+              <SpecRow label="Citations" value="Passage-Level Numbered Chips" />
             </div>
-          </aside>
+
+            <div className="pt-3 border-t border-white/10 flex items-center justify-between font-mono text-[10px] text-zinc-500">
+              <span>Latency: &lt;1.8s per turn</span>
+              <span>Obsidian Zinc · MMXXVI</span>
+            </div>
+          </Card>
         </section>
 
-        {/* ── 02 · INSTRUMENTS ─────────────────────────────── */}
-        <SectionRule index="02" title="instruments at the desk" />
+        {/* ── INSTRUMENTS BENTO GRID ───────────────────────────── */}
+        <section className="space-y-8">
+          <div className="border-b border-white/10 pb-4 flex items-center justify-between">
+            <div className="font-mono text-xs uppercase tracking-widest text-zinc-400 font-semibold">
+              02 / Studio Instruments
+            </div>
+            <span className="text-indigo-400 font-mono text-xs">4 Integrated Plates</span>
+          </div>
 
-        <section className="mt-8 mb-24 grid gap-4 sm:grid-cols-3">
-          {INSTRUMENTS.map((it, i) => (
-            <article
-              key={it.title}
-              className="instrument group flex h-full flex-col justify-between border border-[var(--rule)] bg-[var(--ink-1)] p-7 hover:border-[var(--vermillion)] hover:bg-[var(--ink-2)]"
-            >
-              <div>
-                <div className="flex items-center justify-between font-mono-cap text-[10px] text-[var(--paper-3)]/55">
-                  <span>plate · {ROMAN[i]}</span>
-                  <span className="text-[var(--vermillion)]">{String(i + 1).padStart(2, "0")}</span>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {INSTRUMENTS.map((it, i) => (
+              <Card key={it.title} className="p-7 flex flex-col justify-between space-y-6 group">
+                <div>
+                  <div className="flex items-center justify-between font-mono text-[10px] text-zinc-500 uppercase tracking-wider">
+                    <span>Plate {ROMAN[i]}</span>
+                    <Badge variant="default">{it.badge}</Badge>
+                  </div>
+                  <h3 className="mt-4 font-display text-2xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                    {it.title}
+                  </h3>
+                  <p className="mt-2.5 font-sans text-sm leading-relaxed text-zinc-400">
+                    {it.body}
+                  </p>
                 </div>
-                <h3 className="mt-6 font-display text-[34px] leading-[1] tracking-[-0.02em] text-[var(--paper)]">
-                  {it.title}
-                </h3>
-                <p className="mt-4 font-sans text-[14px] leading-[1.55] text-[var(--paper-3)]/70">
-                  {it.body}
-                </p>
-              </div>
-              <div className="mt-7 border-t border-[var(--rule)] pt-3 font-mono-cap text-[10.5px] text-[var(--paper-3)]/55 transition-colors group-hover:text-[var(--vermillion)]">
-                {it.meta}
-              </div>
-            </article>
-          ))}
-        </section>
-
-        {/* ── 03 · METHOD ──────────────────────────────────── */}
-        <SectionRule index="03" title="the method, in three movements" />
-
-        <section className="mb-28 mt-8 grid gap-x-12 gap-y-10 sm:grid-cols-3">
-          {METHOD.map((m, i) => (
-            <div key={m.title} className="flex flex-col">
-              <div className="flex items-baseline gap-3 border-b border-[var(--rule)] pb-3">
-                <span className="font-display text-[44px] leading-[0.9] text-[var(--vermillion)]">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="font-mono-cap text-[10px] text-[var(--paper-3)]/45">
-                  movement {ROMAN[i].toLowerCase()}
-                </span>
-              </div>
-              <h4 className="mt-5 font-display text-[22px] leading-[1.15] text-[var(--paper)]">
-                {m.title}
-              </h4>
-              <p className="mt-3 font-sans text-[14.5px] leading-[1.6] text-[var(--paper-3)]/75">
-                {m.body}
-              </p>
-            </div>
-          ))}
-        </section>
-
-        {/* ── 04 · CLOSING NOTE ────────────────────────────── */}
-        <section className="mb-28 border-t border-[var(--rule)] pt-14">
-          <div className="grid items-end gap-10 sm:grid-cols-[2fr_1fr]">
-            <p className="font-display-italic text-[clamp(28px,4.2vw,52px)] leading-[1.05] text-[var(--paper)]">
-              An instrument of attention.
-              <br />
-              A method for reading more.
-            </p>
-            <div className="flex sm:justify-end">
-              <Link
-                href="/signup"
-                className="instrument inline-flex items-center gap-3 border border-[var(--paper)] bg-transparent px-7 py-3.5 font-mono-cap text-[12px] text-[var(--paper)] hover:bg-[var(--paper)] hover:text-[var(--ink)]"
-              >
-                begin a session →
-              </Link>
-            </div>
+                <div className="pt-4 border-t border-white/10 font-mono text-xs text-zinc-500 group-hover:text-indigo-400 transition-colors">
+                  {it.meta}
+                </div>
+              </Card>
+            ))}
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-[var(--rule)]">
-        <div className="mx-auto flex max-w-[1380px] flex-col gap-2 px-6 py-7 font-mono-cap text-[10px] text-[var(--paper-3)]/45 sm:flex-row sm:items-center sm:justify-between sm:px-12">
-          <span>DocuMind · hybrid graphrag · vector × bm25 × graph</span>
-          <span className="text-[var(--paper-3)]/35">© mmxxvi · all marks reserved</span>
+      {/* ── FOOTER ───────────────────────────────────────────── */}
+      <footer className="border-t border-white/10 bg-zinc-950/80 mt-auto">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-6 font-mono text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>DocuMind AI · Hybrid GraphRAG System</span>
+          <span>© MMXXVI · All rights reserved</span>
         </div>
       </footer>
     </div>
   );
 }
 
-/* ── data ─────────────────────────────────────────────────────── */
-
 const ROMAN = ["I", "II", "III", "IV"];
 
 const INSTRUMENTS = [
   {
-    title: "Console",
-    body: "Ask anything. Answers stream live, each claim chipped with a numbered citation back to the source passage.",
-    meta: "chat · cited · streaming",
+    title: "Query Console",
+    body: "Ask anything. Answers stream live with numbered citations linked to source passages.",
+    meta: "Chat · Cited · Streaming",
+    badge: "RAG",
   },
   {
-    title: "Atlas",
-    body: "An interactive map of the document's entities, their relationships, and the communities they form.",
-    meta: "graph · force-directed",
+    title: "Summary Studio",
+    body: "Topical synthesis & executive breakdowns with word counts and 1-click Markdown export.",
+    meta: "Executive · Markdown",
+    badge: "SUMMARY",
   },
   {
-    title: "Précis",
-    body: "Concise summaries and twelve-question quizzes, ranked from easy to hard, drawn from your indexed corpus.",
-    meta: "summary · quiz",
+    title: "Quiz Arena",
+    body: "Volume-adaptive multiple choice quizzes with instant evidence callouts & difficulty filters.",
+    meta: "Adaptive · Interactive",
+    badge: "QUIZ",
+  },
+  {
+    title: "Knowledge Atlas",
+    body: "Interactive map of document entities, relationship edges, and Louvain community subgraphs.",
+    meta: "Force-Graph · Louvain",
+    badge: "GRAPH",
   },
 ];
 
-const METHOD = [
-  {
-    title: "Submit a document.",
-    body: "PDF, plaintext, markdown or Word — up to 100 MB. The intake clerk chunks, embeds and stores it locally.",
-  },
-  {
-    title: "Draw the cartography.",
-    body: "Entities and relationships are extracted in parallel; Louvain partitions the graph into topical communities.",
-  },
-  {
-    title: "Read with citations.",
-    body: "Vector, BM25 and graph traversal fuse via reciprocal rank — every answer is annotated with its sources.",
-  },
-];
-
-/* ── tiny primitives ─────────────────────────────────────────── */
-
-function Spec({ label, value }: { label: string; value: string }) {
+function SpecRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-6">
-      <dt className="uppercase tracking-[0.18em] text-[var(--paper-3)]/45">{label}</dt>
-      <dd className="text-right text-[var(--paper)]/85">{value}</dd>
-    </div>
-  );
-}
-
-function SectionRule({ index, title }: { index: string; title: string }) {
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--rule)] pb-3">
-      <div className="font-mono-cap text-[11px] text-[var(--paper-3)]/55">
-        <span className="text-[var(--vermillion)]">{index}</span>
-        <span className="mx-3 text-[var(--paper-3)]/30">/</span>
-        <span>{title}</span>
-      </div>
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-zinc-400 uppercase tracking-wider">{label}</span>
+      <span className="text-zinc-200 font-medium text-right">{value}</span>
     </div>
   );
 }

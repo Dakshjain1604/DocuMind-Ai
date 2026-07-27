@@ -1,13 +1,7 @@
-// app/api/auth/signup/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { connectToMongoDB } from "@/lib/mongodb";
-import User from "@/models/userModel";
+import { findUserByEmail, createUser } from "@/lib/userStore";
 
 export async function POST(req: NextRequest) {
-  await connectToMongoDB();
-
   try {
     const { email, password, name } = await req.json();
 
@@ -18,35 +12,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    if (password.length < 6) {
+      return NextResponse.json(
+        { message: "Password must be at least 6 characters." },
+        { status: 400 }
+      );
+    }
+
+    const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return NextResponse.json(
-        { message: "User already exists." },
+        { message: "User with this email already exists." },
         { status: 409 }
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    await User.create({
-      name,
-      email,
-      password: hashedPassword,
-    });
+    await createUser(name, email, password);
 
     return NextResponse.json(
-      { message: "User created successfully." },
+      { message: "User registered successfully." },
       { status: 201 }
     );
   } catch (error: any) {
     console.error("Signup error:", error);
     return NextResponse.json(
-      { message: error?.message || "Internal server error." },
+      { message: error?.message || "Internal server error during signup." },
       { status: 500 }
     );
   }
-  
 }

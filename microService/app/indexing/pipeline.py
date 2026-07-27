@@ -126,7 +126,7 @@ async def index_document(
         # granularity; graph traversal works fine off a representative sample.
         if len(parents) > max_graph_chunks:
             step = len(parents) / max_graph_chunks
-            sampled_parents = [parents[int(i * step)] for i in range(max_graph_chunks)]
+            sampled_parents = [parents[min(int(i * step), len(parents) - 1)] for i in range(max_graph_chunks)]
             skipped = len(parents) - max_graph_chunks
             log_event(
                 "graph_sampling_partial",

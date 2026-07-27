@@ -1,15 +1,51 @@
-"""Embedding model — local BAAI/bge-small-en-v1.5 via sentence-transformers.
+"""Embedding model — NVIDIA NIM GPU-accelerated embeddings with local HuggingFace fallback.
 
-384-dim English embeddings, ~134MB on disk, runs on CPU / MPS / CUDA.
-Zero per-query cost, no API key required. Model is downloaded from
-HuggingFace on first use.
+NVIDIA NIM model: nvidia/nv-embedqa-e5-v5 (1024-dim, sub-second execution).
+Local fallback: BAAI/bge-small-en-v1.5 (384-dim).
 """
 from __future__ import annotations
+import os
 from functools import lru_cache
-
+from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
+from openai import OpenAI
 
 from app.config.settings import get_settings
+
+
+class NVIDIAEmbeddings(Embeddings):
+    def __init__(self, model: str = "nvidia/nv-embedqa-e5-v5", api_key: str | None = None, base_url: str | None = None):
+        self.model = model
+        self.client = OpenAI(
+            api_key=api_key or os.environ.get("NVIDIA_API_KEY", ""),
+            base_url=base_url or os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+        )
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        batch_size = 32
+        embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            res = self.client.embeddings.create(
+                model=self.model,
+                input=batch,
+                extra_body={"input_type": "passage"},
+            )
+            for item in res.data:
+                embeddings.append(item.embedding)
+        return embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        res = self.client.embeddings.create(
+            model=self.model,
+            input=[text],
+            extra_body={"input_type": "query"},
+        )
+        if not res.data:
+            return []
+        return res.data[0].embedding
 
 
 def detect_device(override: str | None = None) -> str:
@@ -28,8 +64,18 @@ def detect_device(override: str | None = None) -> str:
 
 
 @lru_cache(maxsize=1)
-def get_embeddings() -> HuggingFaceEmbeddings:
+def get_embeddings() -> Embeddings:
     settings = get_settings()
+
+    if settings.nvidia_api_key and (
+        settings.embed_model.startswith("nvidia/") or settings.llm_provider == "nvidia"
+    ):
+        try:
+            model_name = settings.embed_model if settings.embed_model.startswith("nvidia/") else "nvidia/nv-embedqa-e5-v5"
+            return NVIDIAEmbeddings(model=model_name, api_key=settings.nvidia_api_key, base_url=settings.nvidia_base_url)
+        except Exception as e:
+            pass
+
     return HuggingFaceEmbeddings(
         model_name=settings.embed_model,
         model_kwargs={"device": detect_device(settings.embed_device)},

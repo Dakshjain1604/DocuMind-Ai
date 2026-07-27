@@ -1,6 +1,8 @@
 "use client";
 
 import { MouseEventHandler } from "react";
+import { ArrowRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface HomecardProps {
   heading: string;
@@ -27,53 +29,46 @@ export function Homecard({
       onClick={onClick}
       disabled={disabled}
       aria-label={`${ButtonText} — plate ${numeral}: ${heading}`}
-      className={`regmark instrument group/inst relative flex h-full w-full flex-col justify-between border border-[var(--rule)] bg-[var(--ink-1)] p-7 text-left text-[var(--paper)] ${
+      className={`group relative flex h-full w-full flex-col justify-between rounded-2xl border p-6 text-left transition-all duration-200 backdrop-blur-xl ${
         disabled
-          ? "cursor-not-allowed opacity-40"
-          : "hover:border-[var(--vermillion)] hover:bg-[var(--ink-2)]"
+          ? "cursor-not-allowed opacity-50 border-white/5 bg-zinc-950/40"
+          : "border-white/10 bg-zinc-950/70 hover:border-indigo-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-indigo-500/10 active:scale-[0.99]"
       }`}
     >
-      <span className="rm-tr" aria-hidden />
-      <span className="rm-bl" aria-hidden />
-
       {/* Plate header */}
-      <div className="flex items-start justify-between">
-        <span className="font-mono-cap text-[10px] text-[var(--paper-3)]/55">
-          Plate · {numeral}
-        </span>
+      <div className="flex items-center justify-between">
+        <Badge variant={disabled ? "secondary" : "default"}>
+          Plate {numeral}
+        </Badge>
         <span
-          className={`ticker-dot text-[10px] ${
-            disabled ? "text-[var(--paper-3)]/30" : "text-[var(--vermillion)]"
+          className={`h-2 w-2 rounded-full ${
+            disabled ? "bg-zinc-600" : "bg-indigo-500 animate-pulse"
           }`}
           aria-hidden
-        >
-          ●
-        </span>
+        />
       </div>
 
       {/* Glyph + Title */}
-      <div className="my-6 flex flex-col items-start gap-4">
+      <div className="my-5 flex flex-col items-start gap-3">
         {glyph && (
-          <span className="text-[var(--paper)] transition-colors group-hover/inst:text-[var(--vermillion)]">
+          <span className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:text-indigo-300 transition-colors">
             {glyph}
           </span>
         )}
-        <h3 className="font-display text-[44px] leading-[0.95] tracking-[-0.02em] text-[var(--paper)] sm:text-[52px]">
+        <h3 className="font-display text-2xl font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">
           {heading}
         </h3>
       </div>
 
       {/* Description */}
-      <p className="mb-6 max-w-[24ch] font-sans text-[13.5px] leading-[1.55] text-[var(--paper-3)]/70">
+      <p className="mb-6 font-sans text-sm leading-relaxed text-zinc-400">
         {mainText}
       </p>
 
       {/* Action */}
-      <div className="flex items-center justify-between border-t border-[var(--rule)] pt-4 font-mono-cap text-[11px] text-[var(--paper)] transition-colors group-hover/inst:text-[var(--vermillion)]">
+      <div className="flex items-center justify-between border-t border-white/10 pt-4 font-mono text-xs uppercase tracking-wider font-semibold text-zinc-300 group-hover:text-white transition-colors">
         <span>{ButtonText}</span>
-        <span className="font-sans text-[18px] leading-none transition-transform group-hover/inst:translate-x-1.5">
-          →
-        </span>
+        <ArrowRight className="h-4 w-4 text-indigo-400 transition-transform group-hover:translate-x-1" />
       </div>
     </button>
   );
