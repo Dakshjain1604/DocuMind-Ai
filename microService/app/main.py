@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -10,9 +11,9 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.documents import Document
 from langchain_community.document_loaders import (
     PyPDFLoader,
@@ -26,6 +27,7 @@ from app.core.observability import get_trace, get_telemetry_stats, new_request_i
 from app.core.streaming import sse_event, sse_error, sse_token
 from app.indexing.pipeline import index_document
 from app.indexing.store import (
+    InvalidDocHash,
     load_artifacts,
     artifacts_exist,
     doc_hash_from_bytes,
@@ -52,6 +54,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(InvalidDocHash)
+async def _invalid_doc_hash_handler(_request: Request, exc: InvalidDocHash) -> JSONResponse:
+    """A malformed doc_hash is a client error, not a server fault."""
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 UPLOAD_DIR = Path("./tmp/uploaded_files")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -190,14 +198,23 @@ async def post_index(
         if suffix not in {".pdf", ".txt", ".md", ".docx", ".doc"}:
             raise HTTPException(status_code=415, detail=f"Unsupported type: {suffix} for file {f_item.filename}")
 
-        save_path = UPLOAD_DIR / (f_item.filename or "upload")
+        # UploadFile.filename is attacker-controlled (Content-Disposition) and
+        # Starlette does not sanitize it, so strip any directory component
+        # before it reaches the filesystem. Keep the original for display.
+        display_name = f_item.filename or "upload"
+        safe_name = Path(display_name).name
+        if not safe_name or safe_name in {".", ".."}:
+            safe_name = "upload"
+        save_path = UPLOAD_DIR / f"{uuid.uuid4().hex}_{safe_name}"
+        if UPLOAD_DIR.resolve() not in save_path.resolve().parents:
+            raise HTTPException(status_code=400, detail=f"Unsafe filename: {display_name}")
         async with aiofiles.open(save_path, "wb") as f_out:
             await f_out.write(content)
 
         try:
             docs = _load_documents(save_path, suffix)
             for d in docs:
-                d.metadata["source_file"] = f_item.filename or "upload"
+                d.metadata["source_file"] = display_name
             all_documents.extend(docs)
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not read document {f_item.filename}: {e}")

@@ -37,7 +37,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { QuizCardType } from "./types";
 
 type View = "quiz" | "summary" | "chat" | "graph" | "masterclass" | "audit" | "audio" | "slides" | "none";
-type ProgressEvent = { stamp: string; label: string };
+type ProgressEvent = { stamp: string; label: string; tone?: "info" | "warn" };
+
+/**
+ * Payload shapes emitted by the backend indexing pipeline's SSE stream.
+ * Mirrors microService/app/indexing/pipeline.py — keep in sync.
+ */
+type IndexEventData = {
+  n_chunks?: number;
+  n_parents?: number;
+  status?: string;
+  total?: number;
+  sampled_from?: number;
+  skipped?: number;
+  done?: number;
+  stage?: string;
+  message?: string;
+  chunk_id?: number;
+  error?: string;
+  doc_hash?: string;
+  cached?: boolean;
+};
 type StoredDocument = {
   doc_hash: string;
   filename: string;
@@ -72,19 +92,55 @@ function nowStamp() {
     .padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
 }
 
-function formatProgressExtra(data: any): string {
-  if (data?.n_chunks) return ` · ${data.n_chunks} chunks`;
-  if (data?.sampled_from) return ` · ${data.total} planned (sampled from ${data.sampled_from})`;
-  if (data?.total) return ` · ${data.total} planned`;
-  if (data?.n) return ` · ${data.n}`;
-  return "";
+/**
+ * Turns one indexing SSE frame into a log line, or null for frames not worth
+ * showing. The backend emits nine distinct event names (chunking, embedding,
+ * extracting_graph, graph_progress, warning, detecting_communities,
+ * summarizing_communities, community_progress, done) — never a generic
+ * "progress" event.
+ */
+function describeIndexEvent(evt: string, data: IndexEventData): string | null {
+  switch (evt) {
+    case "chunking":
+      return data.n_chunks === undefined
+        ? "CHUNKING: splitting document into hierarchical chunks"
+        : `CHUNKING: ${data.n_chunks} child chunks across ${data.n_parents} parent chunks`;
+    case "embedding":
+      return data.status === "waiting"
+        ? "EMBEDDING: waiting for the vector index to finish"
+        : "EMBEDDING: building vector index";
+    case "extracting_graph":
+      return data.sampled_from === undefined
+        ? `EXTRACTING GRAPH: ${data.total} chunks queued`
+        : `EXTRACTING GRAPH: ${data.total} chunks queued (sampled from ${data.sampled_from})`;
+    case "graph_progress":
+      return `EXTRACTING GRAPH: ${data.done}/${data.total} chunks`;
+    case "detecting_communities":
+      return "DETECTING COMMUNITIES: running Louvain over the entity graph";
+    case "summarizing_communities":
+      return data.skipped
+        ? `SUMMARIZING COMMUNITIES: ${data.total} queued (${data.skipped} over the cap, skipped)`
+        : `SUMMARIZING COMMUNITIES: ${data.total} queued`;
+    case "community_progress":
+      return `SUMMARIZING COMMUNITIES: ${data.done}/${data.total}`;
+    case "warning":
+      return `WARNING${data.stage ? ` (${data.stage})` : ""}: ${
+        data.message ?? data.error ?? "unspecified"
+      }${data.chunk_id === undefined ? "" : ` · chunk ${data.chunk_id}`}`;
+    default:
+      return null;
+  }
 }
 
 function formatSummaryMarkdown(raw: string): string {
   if (!raw) return "";
   let text = raw;
 
-  text = text.replace(/[\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u1F700-\u1F77F\u1F800-\u1F8FF\u1F900-\u1F9FF\u1FA00-\u1FA6F\u1FA70-\u1FAFF\u2600-\u26FF\u2700-\u27BF📌🎯📑💡🎓🎨⚡]/g, "");
+  // Strip decorative emoji the model sometimes prefixes headings with.
+  // NB: this must use \p{...} with the u flag. The previous form wrote
+  // \u1F600 etc., which JS parses as \u1F60 followed by a literal '0', making
+  // the character class a range from '0' upward — it deleted nearly all ASCII.
+  text = text.replace(/\p{Extended_Pictographic}\uFE0F?/gu, "");
 
   text = text.replace(/^#*\s*(Executive Summary.*)$/gmi, "# $1");
   text = text.replace(/^#*\s*(Key Takeaways.*)$/gmi, "\n---\n\n## $1");
@@ -294,10 +350,10 @@ export default function Dashboard() {
           if (!eventLine || !dataLine) continue;
 
           const evt = eventLine.replace("event:", "").trim();
-          const data = JSON.parse(dataLine.replace("data:", "").trim());
+          const data: IndexEventData = JSON.parse(dataLine.replace("data:", "").trim());
 
           if (evt === "done") {
-            const hash = data.doc_hash;
+            const hash = data.doc_hash as string;
             setDocHash(hash);
             setSummary("");
             setQuizCards([]);
@@ -310,14 +366,24 @@ export default function Dashboard() {
             loadTelemetry();
             setProgressLog((prev) => [
               ...prev,
-              { stamp: nowStamp(), label: `Indexing complete · Hash ${shortHash(hash)}` },
+              {
+                stamp: nowStamp(),
+                label: data.cached
+                  ? `Already indexed · reused cached artifacts · Hash ${shortHash(hash)}`
+                  : `Indexing complete · Hash ${shortHash(hash)}`,
+              },
             ]);
             setIntakeFiles((prev) => prev.map((item) => ({ ...item, status: "ready" })));
-          } else if (evt === "progress") {
-            const stageLabel = `${data.stage.toUpperCase()}: ${data.detail}${formatProgressExtra(data.data)}`;
-            setProgressLog((prev) => [...prev, { stamp: nowStamp(), label: stageLabel }]);
           } else if (evt === "error") {
             throw new Error(data.message || "Indexing pipeline failure");
+          } else {
+            const label = describeIndexEvent(evt, data);
+            if (label) {
+              setProgressLog((prev) => [
+                ...prev,
+                { stamp: nowStamp(), label, tone: evt === "warning" ? "warn" : "info" },
+              ]);
+            }
           }
         }
       }
@@ -691,11 +757,16 @@ export default function Dashboard() {
                   </span>
                   <span className="text-[10px] text-zinc-500">{progressLog.length} events</span>
                 </div>
-                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-zinc-300">
+                <div
+                  className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-zinc-300"
+                  aria-live="polite"
+                >
                   {progressLog.map((ev, i) => (
                     <div key={i} className="flex items-start gap-2">
                       <span className="text-zinc-500 shrink-0">[{ev.stamp}]</span>
-                      <span className="text-indigo-300">{ev.label}</span>
+                      <span className={ev.tone === "warn" ? "text-amber-300" : "text-indigo-300"}>
+                        {ev.label}
+                      </span>
                     </div>
                   ))}
                 </div>

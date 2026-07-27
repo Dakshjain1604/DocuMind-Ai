@@ -55,7 +55,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   }, [loadChapters]);
 
   // Load Learning Draft for selected chapter
-  const fetchLearningDraft = useCallback(async (ch: Chapter) => {
+  const fetchLearningDraft = useCallback(async (ch: Chapter, signal: AbortSignal) => {
     setIsDraftLoading(true);
     setDraftText("");
     try {
@@ -63,6 +63,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ doc_hash: docHash, chapter_id: ch.id, chapter_title: ch.title }),
+        signal,
       });
       if (!r.ok || !r.body) {
         setIsDraftLoading(false);
@@ -92,14 +93,18 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
         }
       }
     } catch (err) {
-      console.error("Draft stream error:", err);
+      // An abort is the expected outcome when the user switches chapters
+      // mid-stream, not a failure worth reporting.
+      if ((err as Error)?.name !== "AbortError") {
+        console.error("Draft stream error:", err);
+      }
     } finally {
       setIsDraftLoading(false);
     }
   }, [docHash]);
 
   // Load Chapter Quiz
-  const fetchChapterQuiz = useCallback(async (ch: Chapter) => {
+  const fetchChapterQuiz = useCallback(async (ch: Chapter, signal: AbortSignal) => {
     setIsQuizLoading(true);
     setQuizCards([]);
     try {
@@ -107,37 +112,38 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ doc_hash: docHash, chapter_id: ch.id, chapter_title: ch.title }),
+        signal,
       });
       const data = await r.json();
       if (data.success && data.data?.cards) {
         setQuizCards(data.data.cards);
       }
     } catch (err) {
-      console.error("Failed to load chapter quiz:", err);
+      if ((err as Error)?.name !== "AbortError") {
+        console.error("Failed to load chapter quiz:", err);
+      }
     } finally {
       setIsQuizLoading(false);
     }
   }, [docHash]);
 
+  // Sole trigger for chapter content. handleSelectChapter used to ALSO call
+  // the fetchers directly, which raced this effect and interleaved two SSE
+  // streams into one accumulator. Aborting on cleanup means a rapid chapter
+  // switch cancels the in-flight stream instead of merging into the next one.
   useEffect(() => {
-    if (selectedChapter) {
-      if (activeTab === "draft" && !draftText) {
-        fetchLearningDraft(selectedChapter);
-      } else if (activeTab === "quiz" && quizCards.length === 0) {
-        fetchChapterQuiz(selectedChapter);
-      }
+    if (!selectedChapter) return;
+    const controller = new AbortController();
+    if (activeTab === "draft") {
+      fetchLearningDraft(selectedChapter, controller.signal);
+    } else {
+      fetchChapterQuiz(selectedChapter, controller.signal);
     }
-  }, [selectedChapter, activeTab, draftText, quizCards.length, fetchLearningDraft, fetchChapterQuiz]);
+    return () => controller.abort();
+  }, [selectedChapter, activeTab, fetchLearningDraft, fetchChapterQuiz]);
 
   const handleSelectChapter = (ch: Chapter) => {
     setSelectedChapter(ch);
-    setDraftText("");
-    setQuizCards([]);
-    if (activeTab === "draft") {
-      fetchLearningDraft(ch);
-    } else {
-      fetchChapterQuiz(ch);
-    }
   };
 
   const copyDraft = () => {

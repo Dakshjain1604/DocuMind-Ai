@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const BACKEND = process.env.RAG_BACKEND_URL ?? 'http://localhost:8000';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const res = await fetch("http://127.0.0.1:8000/slide-deck", {
+    const res = await fetch(`${BACKEND}/slide-deck`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

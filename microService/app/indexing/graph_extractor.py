@@ -26,6 +26,14 @@ class GraphBuild:
 
 
 async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
+    """Extract entities/relationships from one chunk.
+
+    Raises on failure rather than returning an empty result. The caller
+    (extract_graph_streaming.run) turns the exception into a 'warning' event and
+    a GraphBuild.warnings entry, so a chunk that yields nothing is visible in
+    the SSE stream and the manifest instead of silently shrinking the graph.
+    """
+    timeout_s = get_settings().graph_extract_timeout_s
     messages = [
         {"role": "system", "content": "You output strict JSON only."},
         {"role": "user", "content": EXTRACTION_PROMPT + doc.page_content},
@@ -40,7 +48,7 @@ async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
                     temperature=0.0,
                     response_format={"type": "json_object"},
                 ),
-                timeout=5.0,
+                timeout=timeout_s,
             )
             data = json.loads(result.content)
             return ExtractionResult(
@@ -48,8 +56,12 @@ async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
                 relationships=data.get("relationships", []),
             )
         except asyncio.TimeoutError:
-            log_event("chunk_extraction_timeout", chunk_id=doc.metadata.get("chunk_id"))
-            return ExtractionResult(entities=[], relationships=[])
+            log_event(
+                "chunk_extraction_timeout",
+                chunk_id=doc.metadata.get("chunk_id"),
+                timeout_s=timeout_s,
+            )
+            raise TimeoutError(f"extraction timed out after {timeout_s}s") from None
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             last_err = e
             messages[0]["content"] = "You output ONLY valid JSON. No prose, no markdown fences."
@@ -57,8 +69,8 @@ async def _extract_one(client: LLMClient, doc: Document) -> ExtractionResult:
             if _is_retriable(e) and attempt == 0:
                 last_err = e
                 continue
-            return ExtractionResult(entities=[], relationships=[])
-    return ExtractionResult(entities=[], relationships=[])
+            raise
+    raise last_err if last_err is not None else RuntimeError("extraction failed")
 
 
 async def extract_graph(chunks: list[Document], *, concurrency: int | None = None) -> GraphBuild:
@@ -68,7 +80,8 @@ async def extract_graph(chunks: list[Document], *, concurrency: int | None = Non
     async for kind, payload in extract_graph_streaming(chunks, concurrency=concurrency):
         if kind == "result":
             final = payload  # type: ignore[assignment]
-    assert final is not None
+    if final is None:
+        raise RuntimeError("extract_graph_streaming produced no result event")
     return final
 
 

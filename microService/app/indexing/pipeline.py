@@ -206,7 +206,23 @@ async def index_document(
                     summaries = payload
 
         graph_payload = _serialize_graph(g, communities, summaries)
+        # Provenance, in insertion order so the manifest reads top-down.
+        # Without these, list_all_documents() falls back to the 64-char hash and
+        # the document library shows a hash where the filename should be.
+        sources = list(
+            dict.fromkeys(
+                str(d.metadata["source_file"])
+                for d in documents
+                if d.metadata.get("source_file")
+            )
+        )
         stats = {
+            "filename": sources[0] if sources else h,
+            "sources": sources,
+            "created_at": time.time(),
+            # Recorded so a provider/model switch is detectable: embeddings of
+            # different dimensions cannot be queried against the same index.
+            "embed_model": settings.embed_model,
             "n_chunks": len(chunks),
             "n_parents": len(parents),
             "n_entities": g.number_of_nodes(),

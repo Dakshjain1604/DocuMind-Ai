@@ -91,6 +91,7 @@ async def test_pipeline_translates_parent_source_chunks_to_child_chunk_ids(tmp_p
 async def test_pipeline_skips_when_artifacts_exist(tmp_path, monkeypatch):
     monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
     from app.indexing.store import doc_hash_from_bytes, doc_dir
+    from app.retrieval.search import BM25Index
     import json
 
     content = b"already-indexed"
@@ -99,6 +100,9 @@ async def test_pipeline_skips_when_artifacts_exist(tmp_path, monkeypatch):
     d.mkdir(parents=True)
     (d / "graph.json").write_text("{}")
     (d / "manifest.json").write_text(json.dumps({"n_chunks": 5}))
+    # bm25_corpus.pkl is part of what artifacts_exist() requires: it is written
+    # last, so a document missing it is a half-written index, not a cached one.
+    BM25Index.build(["already indexed"]).save(d / "bm25_corpus.pkl")
 
     events = []
     async for ev in index_document(file_bytes=content, documents=[]):

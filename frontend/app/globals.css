@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
+/* Supplies the `prose` classes used by the summary and masterclass panels.
+   Without it every prose-* utility silently resolves to nothing. */
+@plugin "@tailwindcss/typography";
 
 /* ─────────────────────────────────────────────────────────────
    DocuMind — Modern Shadcn & Glass Obsidian UI System

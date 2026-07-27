@@ -70,11 +70,24 @@ def get_embeddings() -> Embeddings:
     if settings.nvidia_api_key and (
         settings.embed_model.startswith("nvidia/") or settings.llm_provider == "nvidia"
     ):
+        model_name = (
+            settings.embed_model
+            if settings.embed_model.startswith("nvidia/")
+            else "nvidia/nv-embedqa-e5-v5"
+        )
         try:
-            model_name = settings.embed_model if settings.embed_model.startswith("nvidia/") else "nvidia/nv-embedqa-e5-v5"
-            return NVIDIAEmbeddings(model=model_name, api_key=settings.nvidia_api_key, base_url=settings.nvidia_base_url)
+            return NVIDIAEmbeddings(
+                model=model_name, api_key=settings.nvidia_api_key, base_url=settings.nvidia_base_url
+            )
         except Exception as e:
-            pass
+            # Deliberately fatal. Falling through to the HuggingFace model here
+            # silently swaps a 1024-dim provider for a 384-dim local one, which
+            # does not fail until query time — as a dimension mismatch against
+            # every document already indexed.
+            raise RuntimeError(
+                f"NVIDIA embeddings ({model_name}) are configured but failed to initialize: {e}. "
+                f"Fix the credentials or set RAG_EMBED_MODEL to a local model explicitly."
+            ) from e
 
     return HuggingFaceEmbeddings(
         model_name=settings.embed_model,

@@ -99,6 +99,7 @@ class Settings:
     child_chunk_overlap: int
     max_graph_chunks: int
     graph_concurrency: int
+    graph_extract_timeout_s: float
     max_community_summaries: int
     min_nodes_for_communities: int
 
@@ -156,6 +157,10 @@ def get_settings() -> Settings:
         child_chunk_overlap=_int("RAG_CHILD_CHUNK_OVERLAP", "child_chunk_overlap", rj, 50),
         max_graph_chunks=_int("RAG_MAX_GRAPH_CHUNKS", "max_graph_chunks", rj, 25),
         graph_concurrency=_int("RAG_GRAPH_CONCURRENCY", None, rj, 5),
+        # Per-chunk budget for one JSON-mode extraction call. The old hardcoded
+        # 5s timed out on essentially every call against a 70B-class model,
+        # which silently produced empty knowledge graphs.
+        graph_extract_timeout_s=_float("RAG_GRAPH_EXTRACT_TIMEOUT_S", None, rj, 60.0),
         max_community_summaries=_int("RAG_MAX_COMMUNITY_SUMMARIES", "max_community_summaries", rj, 30),
         min_nodes_for_communities=_int("RAG_MIN_NODES_FOR_COMMUNITIES", None, rj, 5),
         per_retriever_top_k=_int("RAG_PER_RETRIEVER_TOP_K", "per_retriever_top_k", rj, 10),

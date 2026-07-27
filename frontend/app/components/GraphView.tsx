@@ -42,17 +42,21 @@ export function GraphView({
 
   useEffect(() => {
     let cancelled = false;
+    // Reset per-document state so a previous document's graph or error does
+    // not stay on screen while the new one loads.
+    setData(null);
+    setErr(null);
     (async () => {
       try {
         const r = await fetch(`/api/rag/graph/${encodeURIComponent(docHash)}`);
         if (!r.ok) {
-          setErr(`Graph fetch failed · status ${r.status}`);
+          if (!cancelled) setErr(`Graph fetch failed · status ${r.status}`);
           return;
         }
         const j = (await r.json()) as GraphData;
         if (!cancelled) setData(j);
-      } catch (e: unknown) {
-        if (!cancelled) setErr(String(e));
+      } catch {
+        if (!cancelled) setErr("Could not reach the graph service. Is the backend running?");
       }
     })();
     return () => {
@@ -64,6 +68,21 @@ export function GraphView({
     if (!data) return null;
     const comms = new Set(Object.values(data.communities ?? {}));
     return { n: data.nodes.length, e: data.edges.length, c: comms.size };
+  }, [data]);
+
+  // Must be memoized: react-force-graph restarts its physics simulation
+  // whenever the node/link object identities change, so rebuilding this on
+  // every parent render would leave the graph permanently re-simulating.
+  const fgData = useMemo(() => {
+    if (!data) return { nodes: [], links: [] };
+    return {
+      nodes: data.nodes.map((n) => ({
+        id: n.id,
+        group: data.communities?.[n.id] ?? 0,
+        label: n.id,
+      })),
+      links: data.edges.map((e) => ({ source: e.src, target: e.dst })),
+    };
   }, [data]);
 
   if (err) {
@@ -90,15 +109,6 @@ export function GraphView({
       </div>
     );
   }
-
-  const fgData = {
-    nodes: data.nodes.map((n) => ({
-      id: n.id,
-      group: data.communities?.[n.id] ?? 0,
-      label: n.id,
-    })),
-    links: data.edges.map((e) => ({ source: e.src, target: e.dst })),
-  };
 
   return (
     <div className="glass-panel rounded-2xl border border-white/10 bg-zinc-950/80 shadow-2xl backdrop-blur-xl space-y-4 p-4">

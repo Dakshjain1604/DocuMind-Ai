@@ -7,29 +7,38 @@ interface MermaidDiagramProps {
   chart: string;
 }
 
+// Module scope: mermaid.initialize mutates global config, so running it inside
+// the render effect re-initialized the library on every chart change.
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "dark",
+  themeVariables: {
+    darkMode: true,
+    background: "#18181b",
+    primaryColor: "#6366f1",
+    primaryTextColor: "#ffffff",
+    primaryBorderColor: "#818cf8",
+    lineColor: "#38bdf8",
+    secondaryColor: "#a855f7",
+    tertiaryColor: "#34d399",
+  },
+  // Diagram source is LLM-generated, so it is untrusted input. "strict"
+  // escapes label text and disables the click/script directives that "loose"
+  // permits — without it, the svg below is an injection sink.
+  securityLevel: "strict",
+});
+
 export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "dark",
-      themeVariables: {
-        darkMode: true,
-        background: "#18181b",
-        primaryColor: "#6366f1",
-        primaryTextColor: "#ffffff",
-        primaryBorderColor: "#818cf8",
-        lineColor: "#38bdf8",
-        secondaryColor: "#a855f7",
-        tertiaryColor: "#34d399",
-      },
-      securityLevel: "loose",
-    });
-
     let isMounted = true;
+    // Clear the previous diagram so a failed re-render cannot leave the old
+    // chart on screen next to new content.
+    setSvg("");
+    setError(false);
     const renderChart = async () => {
       if (!chart || !chart.trim()) return;
       try {

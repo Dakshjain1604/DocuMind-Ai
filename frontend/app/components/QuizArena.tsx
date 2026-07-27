@@ -189,14 +189,16 @@ const QuizCardWithCallback: React.FC<{
   onAnswer: (selectedId: string, isCorrect: boolean) => void;
   savedAnswer?: { selectedId: string; isCorrect: boolean };
 }> = ({ card, onAnswer, savedAnswer }) => {
-  const [selected, setSelected] = useState<string | null>(savedAnswer ? savedAnswer.selectedId : null);
+  // Derived, not local state. This used to be a useState seeded from
+  // savedAnswer in its initializer only, so Reset (which clears the arena's
+  // answer map) never propagated down: cards kept showing their answers and
+  // kept pointerEvents:"none", making them permanently unanswerable.
+  const selected = savedAnswer?.selectedId ?? null;
 
   const handleSelect = (optionId: string) => {
     if (selected !== null) return;
-    setSelected(optionId);
     const chosenOpt = card.options.find((o) => o.id === optionId);
-    const isCorrect = chosenOpt ? chosenOpt.correct : false;
-    onAnswer(optionId, isCorrect);
+    onAnswer(optionId, chosenOpt ? chosenOpt.correct : false);
   };
 
   const labels = ["A", "B", "C", "D"];

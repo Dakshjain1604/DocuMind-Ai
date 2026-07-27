@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+const BACKEND = process.env.RAG_BACKEND_URL ?? 'http://localhost:8000';
+
 export async function GET() {
   try {
-    const res = await fetch("http://127.0.0.1:8000/documents", {
+    const res = await fetch(`${BACKEND}/documents`, {
       method: "GET",
       headers: { "content-type": "application/json" },
       cache: "no-store",
