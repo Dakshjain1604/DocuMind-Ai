@@ -1,0 +1,35 @@
+# Secrets — never bake into an image
+.env
+.env.*
+!.env.example
+
+# Virtualenvs / caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated RAG artifacts (rebuilt by indexing)
+local_chroma/
+test_local_chroma/
+app/local_chroma/
+.rag_cache/
+traces.db
+
+# Uploaded documents (may contain personal data)
+tmp/
+uploaded_files/
+app/uploaded_files/
+
+# Tuning outputs
+tuning/results/
+tuning/.cache/
+tuning/.index_cache/
+
+# Dev-only
+tests/
+run_tests.sh
+README.md
+.git/
+.gitignore

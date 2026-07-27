@@ -2,10 +2,7 @@
 node_modules/
 .env
 npm-debug.log
-package-lock.json
 dist/
-backend/config.js
-backend/.env
 .next/
 *.tsbuildinfo
 
@@ -22,6 +19,7 @@ venv/
 .env/
 ENV/
 .venv/
+.pytest_cache/
 
 # VSCode
 .vscode/
@@ -31,12 +29,13 @@ logs/
 *.log
 
 # Uploads and generated files
-backend/uploads/
 microService/app/uploaded_files/
+microService/uploaded_files/
 
 # Frontend environment files
 frontend/env
 frontend/node_modules
+frontend/tmp/
 
 # Microservice environment files
 microService/.env
