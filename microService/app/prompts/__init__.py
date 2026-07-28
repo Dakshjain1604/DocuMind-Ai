@@ -10,14 +10,20 @@ tuning/ — they aren't part of the served app.
 """
 from app.prompts.indexing import COMMUNITY_SUMMARY_PROMPT, EXTRACTION_PROMPT
 from app.prompts.retrieval import RERANK_PROMPT, REWRITE_PROMPT
-from app.prompts.generation import ANSWER_PROMPT, DOCUMENT_SUMMARY_PROMPT, QUIZ_PROMPT
+from app.prompts.generation import (
+    ANSWER_SYSTEM_PROMPT,
+    ANSWER_USER_PROMPT,
+    DOCUMENT_SUMMARY_PROMPT,
+    QUIZ_PROMPT,
+)
 
 __all__ = [
     "COMMUNITY_SUMMARY_PROMPT",
     "EXTRACTION_PROMPT",
     "RERANK_PROMPT",
     "REWRITE_PROMPT",
-    "ANSWER_PROMPT",
+    "ANSWER_SYSTEM_PROMPT",
+    "ANSWER_USER_PROMPT",
     "DOCUMENT_SUMMARY_PROMPT",
     "QUIZ_PROMPT",
 ]

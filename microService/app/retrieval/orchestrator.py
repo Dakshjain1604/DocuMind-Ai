@@ -30,7 +30,7 @@ from app.indexing.store import load_artifacts, artifacts_exist
 from app.retrieval.search import BM25Index, GraphIndex, reciprocal_rank_fusion, vector_search
 from app.retrieval.reranker import rerank
 from app.retrieval.rewriter import rewrite_query
-from app.prompts import ANSWER_PROMPT
+from app.prompts import ANSWER_SYSTEM_PROMPT, ANSWER_USER_PROMPT
 
 
 def _load_artifacts_cached(doc_hash: str) -> dict:
@@ -311,7 +311,9 @@ async def answer(
 
         yield {"event": "context", "data": {"citations": citations, "request_id": request_id}}
 
-        messages = []
+        # System turn carries the grounding/citation contract; see
+        # ANSWER_SYSTEM_PROMPT for why it is not folded into the user turn.
+        messages = [{"role": "system", "content": ANSWER_SYSTEM_PROMPT}]
         if history:
             # Client-supplied turns are untrusted: only user/assistant roles are
             # accepted, content is coerced to str and capped, and the history is
@@ -326,7 +328,9 @@ async def answer(
                 content = str(turn.get("content", ""))[:_MAX_HISTORY_CHARS]
                 if content:
                     messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": ANSWER_PROMPT.format(context=context, question=query)})
+        messages.append(
+            {"role": "user", "content": ANSWER_USER_PROMPT.format(context=context, question=query)}
+        )
 
         gen_start = time.perf_counter()
         model_used: str | None = None

@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 
+import { sanitizeMermaid } from "@/lib/mermaid";
+
 interface MermaidDiagramProps {
   chart: string;
 }
@@ -43,7 +45,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
       if (!chart || !chart.trim()) return;
       try {
         const id = `mermaid_${Math.random().toString(36).slice(2, 9)}`;
-        const { svg: svgCode } = await mermaid.render(id, chart);
+        // Small models emit bare multi-word node names, which are a parse
+        // error and lose the whole diagram. Repair before rendering.
+        const { svg: svgCode } = await mermaid.render(id, sanitizeMermaid(chart));
         if (isMounted) {
           setSvg(svgCode);
           setError(false);
