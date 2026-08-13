@@ -45,15 +45,24 @@ function describe(err: unknown): string {
   return "Could not reach the document service.";
 }
 
+import { cookies } from "next/headers";
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /** Proxy a JSON request/response pair. */
 export async function proxyJson(
   path: string,
   init: { method: string; body?: string } = { method: "GET" }
 ): Promise<Response> {
   try {
+    const authHeader = await getAuthHeader();
     const upstream = await fetch(`${BACKEND}${path}`, {
       method: init.method,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeader },
       body: init.body,
       cache: "no-store",
       signal: AbortSignal.timeout(JSON_TIMEOUT_MS),
@@ -75,9 +84,10 @@ export async function proxyStream(
   init: { method: string; body?: BodyInit; headers?: HeadersInit }
 ): Promise<Response> {
   try {
+    const authHeader = await getAuthHeader();
     const upstream = await fetch(`${BACKEND}${path}`, {
       method: init.method,
-      headers: init.headers,
+      headers: { ...init.headers, ...authHeader } as HeadersInit,
       body: init.body,
       // No timeout: these stream for as long as generation takes. The client
       // aborting propagates and closes the upstream connection.

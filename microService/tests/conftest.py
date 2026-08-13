@@ -29,6 +29,14 @@ os.environ.setdefault("RAG_LLM_CACHE_ENABLED", "false")
 os.environ.setdefault("RAG_ANSWER_CACHE_ENABLED", "false")
 
 
+@pytest.fixture(autouse=True)
+def bypass_auth():
+    from app.main import app
+    from app.core.auth import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "test"}
+    yield
+    app.dependency_overrides.clear()
+
 @pytest.fixture
 def tmp_persist_dir(tmp_path, monkeypatch):
     """Isolated persist directory per test."""

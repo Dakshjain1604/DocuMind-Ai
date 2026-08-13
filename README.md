@@ -6,7 +6,7 @@ parallel, fuses the results, reranks them, and streams back an answer with
 passage-level citations.
 
 Two services: a **FastAPI** backend (`microService/`) that does the indexing and
-retrieval, and a **Next.js 15** frontend (`frontend/`) that drives it.
+retrieval (fully tested, highly observable with tracing/logging), and a **Next.js 15** frontend (`frontend/`) using **shadcn-ui** for a clean, minimalist design.
 
 ---
 

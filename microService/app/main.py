@@ -63,8 +63,11 @@ async def _invalid_doc_hash_handler(_request: Request, exc: InvalidDocHash) -> J
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+from fastapi import Depends
+from app.core.auth import get_current_user
+
 app.include_router(telemetry.router)
-app.include_router(documents.router)
-app.include_router(query.router)
-app.include_router(studio.router)
-app.include_router(masterclass.router)
+app.include_router(documents.router, dependencies=[Depends(get_current_user)])
+app.include_router(query.router, dependencies=[Depends(get_current_user)])
+app.include_router(studio.router, dependencies=[Depends(get_current_user)])
+app.include_router(masterclass.router, dependencies=[Depends(get_current_user)])

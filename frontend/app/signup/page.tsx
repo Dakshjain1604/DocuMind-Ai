@@ -45,7 +45,7 @@ export default function SignupPage() {
           Already enrolled?{" "}
           <Link
             href="/signin"
-            className="text-indigo-400 font-semibold hover:underline inline-flex items-center gap-1 ml-1"
+            className="text-foreground font-semibold hover:underline inline-flex items-center gap-1 ml-1"
           >
             <span>Return to sign in</span>
             <ArrowRight className="h-3 w-3" />

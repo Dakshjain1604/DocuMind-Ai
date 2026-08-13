@@ -44,7 +44,7 @@ export default function SigninPage() {
           New to DocuMind?{" "}
           <Link
             href="/signup"
-            className="text-indigo-400 font-semibold hover:underline inline-flex items-center gap-1 ml-1"
+            className="text-foreground font-semibold hover:underline inline-flex items-center gap-1 ml-1"
           >
             <span>Request access</span>
             <ArrowRight className="h-3 w-3" />

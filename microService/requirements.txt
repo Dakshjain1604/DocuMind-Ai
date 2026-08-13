@@ -40,3 +40,4 @@ tqdm
 pytesseract
 pdf2image
 
+pyjwt

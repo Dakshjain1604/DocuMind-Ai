@@ -146,7 +146,9 @@ class Settings:
 
     # Observability
     trace_db_path: str
-
+    
+    # Auth
+    jwt_secret: str
 
 def get_settings() -> Settings:
     rj = _load_retrieval_json()
@@ -208,4 +210,5 @@ def get_settings() -> Settings:
         ocr_languages=_str("RAG_OCR_LANGUAGES", None, rj, "eng"),
         sse_heartbeat_s=_float("RAG_SSE_HEARTBEAT_S", None, rj, 2.0),
         trace_db_path=_str("RAG_TRACE_DB_PATH", None, rj, f"{persist_dir}/traces.db"),
+        jwt_secret=_str("JWT_SECRET", None, rj, "documind-secret-key-2026"),
     )

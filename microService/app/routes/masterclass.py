@@ -58,12 +58,16 @@ async def extract_chapters(req: MasterclassRequest):
         # No stand-in chapter list. Inventing "Chapter 1: Core Principles"
         # for a document we failed to read is a fabricated table of contents.
         logger.error("chapter extraction failed: %s", e)
+        record_trace(request_id, doc_hash=req.doc_hash, query="[masterclass_chapters]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(LLM_UNAVAILABLE, str(e), total_chapters=0, chapters=[])
 
     try:
         data = json.loads(r.content)
     except json.JSONDecodeError as e:
         logger.error("chapter extraction returned non-JSON: %s", e)
+        record_trace(request_id, doc_hash=req.doc_hash, query="[masterclass_chapters]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(INVALID_LLM_OUTPUT, "model did not return valid JSON", total_chapters=0, chapters=[])
 
     chapters = data.get("chapters", [])
@@ -89,6 +93,9 @@ async def generate_learning_draft(req: MasterclassRequest):
     title = req.chapter_title or f"Chapter {req.chapter_id or 1}"
 
     async def event_generator() -> AsyncGenerator[str, None]:
+        request_id = new_request_id()
+        start = time.perf_counter()
+        acc = ""
         try:
             prompt = LEARNING_DRAFT_PROMPT.format(chapter_title=title, content=sample.text)
             stream = get_llm().stream(
@@ -97,10 +104,21 @@ async def generate_learning_draft(req: MasterclassRequest):
                 temperature=0.3,
             )
             async for delta, _model in stream:
+                acc += delta
                 yield sse_event("token", {"text": delta})
             yield sse_event("done", {"doc_hash": req.doc_hash, "coverage": sample.coverage})
+            record_trace(
+                request_id, doc_hash=req.doc_hash, query=f"[learning_draft_{req.chapter_id}]",
+                total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
+                answer_text=acc,
+            )
         except Exception as e:
             logger.error("learning draft stream error: %s", e)
+            record_trace(
+                request_id, doc_hash=req.doc_hash, query=f"[learning_draft_{req.chapter_id}]",
+                total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
+                error=str(e),
+            )
             yield sse_error(str(e))
 
     # Same headers as every other SSE route. Without no-transform /
@@ -154,7 +172,15 @@ async def generate_chapter_quiz(req: MasterclassRequest):
         return ok(total_questions=len(valid_cards), cards=valid_cards, coverage=sample.coverage)
     except json.JSONDecodeError as e:
         logger.error("chapter quiz returned non-JSON: %s", e)
+        record_trace(
+            request_id, doc_hash=req.doc_hash, query=f"[chapter_quiz_{req.chapter_id}]",
+            total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e)
+        )
         return fail(INVALID_LLM_OUTPUT, "model did not return valid JSON", total_questions=0, cards=[])
     except Exception as e:
         logger.error("chapter quiz error: %s", e)
+        record_trace(
+            request_id, doc_hash=req.doc_hash, query=f"[chapter_quiz_{req.chapter_id}]",
+            total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e)
+        )
         return fail(LLM_UNAVAILABLE, str(e), total_questions=0, cards=[])

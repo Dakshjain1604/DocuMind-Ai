@@ -258,6 +258,7 @@ async def run_compliance_audit(doc_hash: str, *, request_id: str | None = None) 
     if not artifacts_exist(doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", total_findings=0, audit=[])
     request_id = request_id or new_request_id()
+    start = time.perf_counter()
     loaded = load_artifacts(doc_hash)
     sample = _get_document_sample(loaded, max_chunks=10)
 
@@ -273,21 +274,32 @@ async def run_compliance_audit(doc_hash: str, *, request_id: str | None = None) 
         # audit results on an LLM outage is indistinguishable, to the caller,
         # from a real audit of the document.
         logger.error("compliance audit failed: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[compliance_audit]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(LLM_UNAVAILABLE, str(e), total_findings=0, audit=[])
 
     try:
         data = json.loads(r.content)
     except json.JSONDecodeError as e:
         logger.error("compliance audit returned non-JSON: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[compliance_audit]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(INVALID_LLM_OUTPUT, "model did not return valid JSON", total_findings=0, audit=[])
 
     audit_items = data.get("audit", [])
+    record_trace(
+        request_id, doc_hash=doc_hash, query="[compliance_audit]",
+        total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
+        total_tokens_in=r.tokens_in, total_tokens_out=r.tokens_out, total_cost_usd=r.cost_usd
+    )
     return ok(total_findings=len(audit_items), audit=audit_items, coverage=sample.coverage)
 
 
 async def generate_audio_briefing(doc_hash: str, *, request_id: str | None = None) -> dict[str, Any]:
     if not artifacts_exist(doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", script="")
+    request_id = request_id or new_request_id()
+    start = time.perf_counter()
     loaded = load_artifacts(doc_hash)
     sample = _get_document_sample(loaded, max_chunks=8)
 
@@ -306,14 +318,23 @@ async def generate_audio_briefing(doc_hash: str, *, request_id: str | None = Non
         )
     except Exception as e:
         logger.error("audio briefing failed: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[audio_briefing]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(LLM_UNAVAILABLE, str(e), script="")
 
+    record_trace(
+        request_id, doc_hash=doc_hash, query="[audio_briefing]",
+        total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
+        total_tokens_in=r.tokens_in, total_tokens_out=r.tokens_out, total_cost_usd=r.cost_usd
+    )
     return ok(script=r.content, coverage=sample.coverage)
 
 
 async def generate_slide_deck(doc_hash: str, *, request_id: str | None = None) -> dict[str, Any]:
     if not artifacts_exist(doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", total_slides=0, slides=[])
+    request_id = request_id or new_request_id()
+    start = time.perf_counter()
     loaded = load_artifacts(doc_hash)
     sample = _get_document_sample(loaded, max_chunks=10)
 
@@ -326,13 +347,22 @@ async def generate_slide_deck(doc_hash: str, *, request_id: str | None = None) -
         )
     except Exception as e:
         logger.error("slide deck failed: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[slide_deck]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(LLM_UNAVAILABLE, str(e), total_slides=0, slides=[])
 
     try:
         data = json.loads(r.content)
     except json.JSONDecodeError as e:
         logger.error("slide deck returned non-JSON: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[slide_deck]",
+                     total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e))
         return fail(INVALID_LLM_OUTPUT, "model did not return valid JSON", total_slides=0, slides=[])
 
     slides = data.get("slides", [])
+    record_trace(
+        request_id, doc_hash=doc_hash, query="[slide_deck]",
+        total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
+        total_tokens_in=r.tokens_in, total_tokens_out=r.tokens_out, total_cost_usd=r.cost_usd
+    )
     return ok(total_slides=len(slides), slides=slides, coverage=sample.coverage)
