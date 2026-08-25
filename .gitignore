@@ -58,7 +58,12 @@ microService/.rag_cache/
 traces.db
 microService/tuning/.cache/
 microService/tuning/.index_cache/
-microService/tuning/results/
+microService/tuning/eval_chroma/
+# Full grid-sweep output is noisy/regenerable and stays ignored, but the
+# curated scoped_eval.py ablation (committed as portfolio evidence) is not.
+microService/tuning/results/*.json
+!microService/tuning/results/scoped_ablation.json
+!microService/tuning/results/best_config.json
 microService/tuning/results.csv
 microService/tuning/results.md
 microService/tuning/best_config.json

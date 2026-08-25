@@ -8,6 +8,33 @@ passage-level citations.
 Two services: a **FastAPI** backend (`microService/`) that does the indexing and
 retrieval (fully tested, highly observable with tracing/logging), and a **Next.js 15** frontend (`frontend/`) using **shadcn-ui** for a clean, minimalist design.
 
+<p align="center">
+  <img src="docs/screenshots/01-landing.jpg" width="49%" alt="Landing page" />
+  <img src="docs/screenshots/02-query-citations.jpg" width="49%" alt="Streamed answer with passage-level citations" />
+  <br/>
+  <img src="docs/screenshots/03-trace-panel.jpg" width="49%" alt="Per-request observability trace: stage latencies and retrieval provenance" />
+  <img src="docs/screenshots/04-masterclass-diagram.jpg" width="49%" alt="Auto-generated system architecture diagram from an indexed document" />
+</p>
+
+## Measured results
+
+Retrieval ablation against a 40-question eval set (real gold chunk ids, generated
+by an LLM over randomly sampled chunks from a 535-page technical book — see
+[`microService/tuning/`](microService/tuning)). Each row adds one pipeline stage
+on top of the last; the final row is the actual production config.
+
+| Pipeline stage | Recall@10 | MRR | nDCG@10 |
+|---|---|---|---|
+| Vector-only (naive RAG) | 0.150 | 0.064 | 0.049 |
+| + hybrid fusion (BM25 + graph, RRF) | 0.325 | 0.162 | 0.116 |
+| + cross-encoder rerank | 0.375 | 0.336 | 0.178 |
+| + multi-query rewrite (production config) | **0.425** | **0.352** | **0.194** |
+
+**Hybrid retrieval + reranking + query rewriting improves Recall@10 by +183%
+and MRR by +454% over naive vector-only search**, on identical chunking and
+the identical eval set. Full numbers, methodology, and how to reproduce:
+[`microService/tuning/results/scoped_ablation.md`](microService/tuning/results/scoped_ablation.md).
+
 ---
 
 ## How it works
@@ -82,8 +109,8 @@ npm run dev                   # http://localhost:3000
 **Tests**
 
 ```bash
-cd microService && ./run_tests.sh        # 134 tests
-cd frontend && npx tsc --noEmit && npm run lint
+cd microService && ./run_tests.sh        # 182 tests
+cd frontend && npx tsc --noEmit && npm run lint && npm run test   # + npm run test:e2e (Playwright)
 ```
 
 ## Configuration
@@ -127,11 +154,16 @@ Worth stating plainly, because several of them shape what the output means.
   object and the UI states what it was derived from. Vector and BM25 retrieval
   do cover the whole document — this caveat applies to the generated artifacts,
   not to querying.
-- **Single-user.** Auth gates the dashboard, but documents are not scoped to an
-  account: anyone signed in sees every indexed document.
-- **The backend service is unauthenticated.** It assumes it is not publicly
-  reachable. Do not expose port 8000 directly.
-- **No rate limiting.** Every endpoint fans out to paid LLM calls.
+- **Document ownership is opt-in, not retroactive.** Documents are tagged with
+  an `owners` list at index time and access-checked on every read (`403` if
+  you're not an owner). Documents indexed before this existed carry no
+  `owners` key at all and stay visible to everyone — a deliberate
+  backward-compat choice, not a bug.
+- **The backend requires a valid JWT** (verified independently of the
+  frontend, `HS256`, shared `JWT_SECRET`) on every document-scoped route, and
+  is rate-limited per client IP (`/index` 5/min, `/query` 20/min, studio
+  routes 10/min by default). It still assumes it is not the public edge of
+  the system — put it behind the frontend, not directly on the internet.
 - **Cost tracking is partial.** Token counts are recorded; `MODEL_PRICING` is
   empty, so costs report as unknown for most models.
 
@@ -158,3 +190,7 @@ frontend/
   lib/                 sse parsing, formatting, auth helpers
   middleware.ts        gates /Dashboard
 ```
+
+## License
+
+[MIT](LICENSE)

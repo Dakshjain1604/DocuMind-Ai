@@ -7,7 +7,7 @@ See the [root README](../README.md) for the architecture and setup.
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env
 .venv/bin/python -m uvicorn app.main:app --reload --port 8000
-./run_tests.sh                # 134 tests; add -q for a quiet run
+./run_tests.sh                # 182 tests; add -q for a quiet run
 ```
 
 Interactive API docs at `http://localhost:8000/docs`.
@@ -109,3 +109,16 @@ on its first query.
 resolve as **env var > retrieval.json > default**, so a completed sweep feeds
 back into the service. It is run by hand and needs its own source PDF; nothing
 in the app depends on it.
+
+`scoped_eval.py` is a smaller, faster companion to the full grid: a 4-stage
+ablation (vector-only → + hybrid fusion → + rerank → + multi-query) against
+the same `eval_set.jsonl`, holding chunking fixed at whatever
+`build_eval_set.py` used when it assigned `gold_chunk_id`. Results committed
+under `tuning/results/` and summarized in the [root README](../README.md#measured-results).
+Run it with `microService/.venv/bin/python microService/tuning/scoped_eval.py`
+from the **repo root** (both `sweep.py` and `scoped_eval.py` resolve the source
+PDF and eval set relative to the repo root, not `microService/`).
+(`SCOPED_EVAL_SMOKE_N=5` env var to smoke-test on a few questions first — a
+chunking mismatch between this script and `build_eval_set.py` silently
+degenerates every recall number to 0, so always smoke-test after changing
+either one).

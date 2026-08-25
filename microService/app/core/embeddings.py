@@ -67,17 +67,20 @@ def detect_device(override: str | None = None) -> str:
 def get_embeddings() -> Embeddings:
     settings = get_settings()
 
-    if settings.nvidia_api_key and (
-        settings.embed_model.startswith("nvidia/") or settings.llm_provider == "nvidia"
-    ):
-        model_name = (
-            settings.embed_model
-            if settings.embed_model.startswith("nvidia/")
-            else "nvidia/nv-embedqa-e5-v5"
-        )
+    # RAG_EMBED_MODEL is the sole source of truth for which embedding provider
+    # to use — LLM_PROVIDER only selects the chat/completion provider and must
+    # not leak into this decision. It used to (`or settings.llm_provider ==
+    # "nvidia"`), which meant an explicit local RAG_EMBED_MODEL was silently
+    # ignored whenever LLM_PROVIDER=nvidia, falling back to a hardcoded NVIDIA
+    # model name instead of the one actually configured.
+    if settings.embed_model.startswith("nvidia/"):
+        if not settings.nvidia_api_key:
+            raise RuntimeError(
+                f"RAG_EMBED_MODEL={settings.embed_model} requires NVIDIA_API_KEY to be set."
+            )
         try:
             return NVIDIAEmbeddings(
-                model=model_name, api_key=settings.nvidia_api_key, base_url=settings.nvidia_base_url
+                model=settings.embed_model, api_key=settings.nvidia_api_key, base_url=settings.nvidia_base_url
             )
         except Exception as e:
             # Deliberately fatal. Falling through to the HuggingFace model here
@@ -85,8 +88,8 @@ def get_embeddings() -> Embeddings:
             # does not fail until query time — as a dimension mismatch against
             # every document already indexed.
             raise RuntimeError(
-                f"NVIDIA embeddings ({model_name}) are configured but failed to initialize: {e}. "
-                f"Fix the credentials or set RAG_EMBED_MODEL to a local model explicitly."
+                f"NVIDIA embeddings ({settings.embed_model}) are configured but failed to "
+                f"initialize: {e}. Fix the credentials or set RAG_EMBED_MODEL to a local model."
             ) from e
 
     return HuggingFaceEmbeddings(

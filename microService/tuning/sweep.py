@@ -219,7 +219,7 @@ def save_index_cache(
         "bm25_tokens": bm25._tokens,
         "graph_data": {
             "nodes": [{"id": n, **graph._nodes[n].copy()} for n in graph._nodes],
-            "edges": [{"src": u, "dst": v, **graph._adj.get(u, {})} for u in graph._adj for v in graph._adj.get(u, set())],
+            "edges": [{"src": u, "dst": v} for u in graph._adj for v in graph._adj[u]],
             "communities": graph._comm,
             "community_summaries": graph._summaries,
         },
