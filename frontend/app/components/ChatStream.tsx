@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import axios from "axios";
 import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight, Gauge } from "lucide-react";
 import { CitationChip } from "./CitationChip";
 import { readSseStream } from "@/lib/sse";
@@ -47,12 +48,6 @@ function newTurn(question: string): Turn {
   };
 }
 
-const SUGGESTED_QUERIES = [
-  "What are the core technical concepts and methodologies described?",
-  "Summarize the key findings, metrics, and operational details.",
-  "What is the overall architecture model and structural design?",
-];
-
 export function ChatStream({
   docHash,
   onCiteClick,
@@ -64,6 +59,7 @@ export function ChatStream({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [suggestedQueries, setSuggestedQueries] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
 
@@ -73,6 +69,28 @@ export function ChatStream({
 
   useEffect(() => {
     setTurns([]);
+  }, [docHash]);
+
+  // Grounded in this specific document, not a fixed generic set - and simply
+  // absent (never a stale/generic fallback) if generation fails or the
+  // document supports nothing worth suggesting.
+  useEffect(() => {
+    let cancelled = false;
+    setSuggestedQueries([]);
+    axios
+      .post("/api/rag/suggested-questions", { doc_hash: docHash })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success && Array.isArray(res.data.data?.questions)) {
+          setSuggestedQueries(res.data.data.questions);
+        }
+      })
+      .catch(() => {
+        /* Empty-state suggestions are a nicety, not worth surfacing an error for. */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [docHash]);
 
   useEffect(() => {
@@ -91,6 +109,20 @@ export function ChatStream({
     const q = qText.trim();
     if (!q || busy) return;
     setQuery("");
+
+    // Prior turns as conversation memory, so a follow-up like "what about
+    // its downsides" resolves against what was actually asked/answered
+    // before - the backend has always accepted and used this (orchestrator.py
+    // threads it into the prompt), the frontend just never sent it.
+    // Completed turns only: a still-streaming or failed turn has no settled
+    // answer worth feeding back in as context.
+    const history = turns
+      .filter((t) => !t.busy && t.answer)
+      .flatMap((t) => [
+        { role: "user", content: t.question },
+        { role: "assistant", content: t.answer },
+      ]);
+
     const t = newTurn(q);
     setTurns((ts) => [...ts, t]);
     setBusy(true);
@@ -99,7 +131,7 @@ export function ChatStream({
       const r = await fetch("/api/rag/query", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ doc_hash: docHash, query: q }),
+        body: JSON.stringify({ doc_hash: docHash, query: q, history }),
       });
       const requestId = r.headers.get("X-Request-Id");
       if (requestId) updateTurn(t.id, { requestId });
@@ -123,7 +155,7 @@ export function ChatStream({
     } finally {
       setBusy(false);
     }
-  }, [docHash, busy, updateTurn]);
+  }, [docHash, busy, updateTurn, turns]);
 
   const handleCopyAnswer = (turnId: string, answerText: string) => {
     navigator.clipboard.writeText(answerText);
@@ -135,15 +167,16 @@ export function ChatStream({
 
   return (
     <div className="space-y-6">
-      {/* Suggested Queries Chips */}
-      {turns.length === 0 && (
+      {/* Suggested Queries Chips - grounded in this document; absent (not a
+          generic fallback) while loading or if generation returned nothing */}
+      {turns.length === 0 && suggestedQueries.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
             <Lightbulb className="h-3.5 w-3.5 text-amber-400" />
-            <span>Suggested Context Queries</span>
+            <span>Suggested Questions</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {SUGGESTED_QUERIES.map((sq, i) => (
+            {suggestedQueries.map((sq, i) => (
               <button
                 key={i}
                 onClick={() => askQuery(sq)}

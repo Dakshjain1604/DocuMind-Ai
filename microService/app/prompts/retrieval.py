@@ -13,14 +13,23 @@ from __future__ import annotations
 # "hyde" must stay a real declarative sentence — HyDE works by embedding a
 # plausible *answer* and searching with that vector. Degrading it to a keyword
 # phrase makes it redundant with the keywords field and loses the benefit.
+# {history_block} is empty on a fresh question and a recent-turns block on a
+# follow-up. Without it, a pronoun-bearing follow-up ("what are its
+# limitations?") got expanded on the raw text alone: hyde/keywords/entities
+# all came out about "it" with no idea what "it" was, and retrieval surfaced
+# whatever passage happened to match those words best — a wrong, unrelated
+# topic, confidently answered and cited. resolved_query is the first field
+# so the model commits to what the question actually means before it starts
+# generating the fields retrieval depends on.
 REWRITE_PROMPT = """You expand a search query for hybrid retrieval over one document. Output JSON only.
-
-{{"hyde": "one plausible sentence that a document answering this query would literally contain - write it as a factual statement, not a description of the topic",
+{history_block}
+{{"resolved_query": "the query rewritten as a standalone question with every pronoun and implicit reference resolved from the conversation above - identical to the query if it is already standalone",
+ "hyde": "one plausible sentence that a document answering this query would literally contain - write it as a factual statement, not a description of the topic",
  "keywords": "3-8 space-separated lexical search terms",
  "entities_mentioned": ["proper nouns or technical terms appearing in the query"],
  "query_variants": [{n_variants} rephrasings of the question, each under 12 words]}}
 
-Keep every field short. No commentary.
+Base hyde, keywords, entities_mentioned and query_variants on resolved_query, not on the raw query below. Keep every field short. No commentary.
 
 Query: {query}
 """

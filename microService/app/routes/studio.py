@@ -17,6 +17,7 @@ from app.routes.generation import (
     generate_audio_briefing,
     generate_quiz_cards,
     generate_slide_deck,
+    generate_suggested_questions,
     run_compliance_audit,
     summarize_stream,
 )
@@ -47,6 +48,18 @@ async def post_quiz(
     request_id = new_request_id()
     response.headers["X-Request-Id"] = request_id
     return await generate_quiz_cards(body.doc_hash, request_id=request_id)
+
+
+@router.post("/suggested-questions")
+@limiter.limit(studio_limit)
+async def post_suggested_questions(
+    request: Request, body: DocHashBody, response: Response, user: dict = Depends(get_current_user)
+):
+    """3 example questions grounded in this document, for the Query Console's empty state."""
+    require_owned(body.doc_hash, user)
+    request_id = new_request_id()
+    response.headers["X-Request-Id"] = request_id
+    return await generate_suggested_questions(body.doc_hash, request_id=request_id)
 
 
 @router.post("/compliance-audit")

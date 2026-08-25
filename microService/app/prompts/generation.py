@@ -25,13 +25,28 @@ Two rules govern every answer:
    - Where a passage contradicts what you know, the passage wins.
    - Answer whatever part of the question the passages support and say plainly that the rest is not stated. If they support none of it, reply exactly: I couldn't find that in the document.
 
-Open with the direct answer, then supporting detail. No preamble, no restating the question."""
+Open with the direct answer, then develop it fully: mechanism, reasoning, and any relevant specifics, caveats, examples or numbers the passages give - drawing on every passage that bears on the question, not just the first one. A one-sentence reply is only correct when the passages genuinely support nothing more; do not truncate an answer that has more grounded detail available just to be brief. Every sentence still needs its citation. No preamble, no restating the question, no filler."""
 
 
 ANSWER_USER_PROMPT = """Passages:
 {context}
 
 Question: {question}"""
+
+
+SUGGESTED_QUESTIONS_PROMPT = """Write exactly 3 example questions a reader might ask about the document below.
+
+GROUNDING:
+- Every question must be answerable from the document content given - no generic questions that could apply to any document.
+- Reference the document's own subject matter, terms and specifics, so the question is clearly about THIS document.
+- Vary the questions: cover different parts or angles of the document rather than three variations on the same point.
+
+Return JSON in exactly this shape, substituting your own content for every placeholder:
+{{"questions": ["<specific question about this document>", "<specific question about this document>", "<specific question about this document>"]}}
+
+Document content:
+{content}
+"""
 
 
 DOCUMENT_SUMMARY_PROMPT = """You are an expert executive document summarizer. Create an exceptionally structured, highly readable summary of the document below using exact Markdown formatting tags.

@@ -140,6 +140,9 @@ class Settings:
     rerank_mode: str  # cross_encoder | llm | off
     rerank_model: str
 
+    # Generation
+    answer_max_tokens: int
+
     # Cache
     cache_dir: str
     max_cache_docs: int
@@ -211,6 +214,7 @@ def get_settings() -> Settings:
         max_community_context=_int("RAG_MAX_COMMUNITY_CONTEXT", None, rj, 2),
         rerank_mode=_resolve_rerank_mode(rj),
         rerank_model=_str("RAG_RERANK_MODEL", None, rj, "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+        answer_max_tokens=_int("RAG_ANSWER_MAX_TOKENS", None, rj, 2048),
         cache_dir=_str("RAG_CACHE_DIR", None, rj, "./.rag_cache"),
         max_cache_docs=_int("RAG_MAX_CACHE_DOCS", None, rj, 3),
         llm_cache_enabled=_bool("RAG_LLM_CACHE_ENABLED", True),

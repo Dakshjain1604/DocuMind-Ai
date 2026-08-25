@@ -47,7 +47,7 @@ async def test_answer_streams_tokens_with_one_retriever_dead(fake_loaded):
     def fake_vector(*a, **k):
         raise RuntimeError("vector down")
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "Answer ", "m"
         yield "[1]", "m"
 
@@ -93,7 +93,7 @@ async def test_answer_fans_out_vector_search_across_query_variants(fake_loaded):
         calls.append(query)
         return [0] if query == "hyde text" else [1]
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "ok", "m"
 
     with patch("app.retrieval.orchestrator._load_artifacts_cached", return_value=fake_loaded), \
@@ -133,7 +133,7 @@ async def test_answer_dedupes_children_sharing_a_parent_into_one_passage(fake_lo
     def fake_vector_search_chunks(chroma, query, top_k):
         return [0, 1]  # both children of parent 0
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "ok", "m"
 
     with patch("app.retrieval.orchestrator._load_artifacts_cached", return_value=fake_loaded_with_parents), \
@@ -162,7 +162,7 @@ async def test_answer_falls_back_to_child_text_when_no_parent_data(fake_loaded):
     def fake_vector_search_chunks(chroma, query, top_k):
         return [0, 1]
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "ok", "m"
 
     with patch("app.retrieval.orchestrator._load_artifacts_cached", return_value=fake_loaded), \
@@ -193,7 +193,7 @@ async def test_answer_returns_cached_response_on_repeat_query(fake_loaded, monke
 
     stream_call_count = 0
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         nonlocal stream_call_count
         stream_call_count += 1
         yield "Answer one", "m"
@@ -231,7 +231,7 @@ async def test_answer_does_not_use_cache_when_history_present(fake_loaded, monke
 
     stream_call_count = 0
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         nonlocal stream_call_count
         stream_call_count += 1
         yield f"Answer {stream_call_count}", "m"
@@ -261,7 +261,7 @@ async def test_answer_persists_trace_with_stages_and_context(fake_loaded, tmp_pa
     def fake_vector_search_chunks(chroma, query, top_k):
         return [0]
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "The answer", "test-model"
 
     with patch("app.retrieval.orchestrator._load_artifacts_cached", return_value=fake_loaded), \
@@ -296,7 +296,7 @@ async def test_answer_persists_partial_trace_on_error(fake_loaded, tmp_path, mon
     def fake_vector_search_chunks(chroma, query, top_k):
         return [0]
 
-    async def fake_stream(*, role, messages, temperature):
+    async def fake_stream(*, role, messages, temperature, max_tokens=None):
         yield "partial ", "test-model"
         raise RuntimeError("connection dropped")
 

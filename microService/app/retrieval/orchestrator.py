@@ -170,6 +170,30 @@ _MAX_HISTORY_TURNS = 20
 _MAX_HISTORY_CHARS = 8000
 
 
+def _sanitize_history(history: list[dict] | None) -> list[dict[str, str]]:
+    """Client-supplied turns are untrusted: only user/assistant roles are
+    accepted, content is coerced to str and capped, and the list is
+    truncated. Splicing it verbatim let a caller inject a system turn
+    (overriding the answer prompt) or blow up cost with a huge array.
+
+    Sanitized once here and reused for both the retrieval-rewrite stage and
+    the final answer messages, rather than re-validating (and re-trusting)
+    the same raw input twice."""
+    if not history:
+        return []
+    safe: list[dict[str, str]] = []
+    for turn in history[-_MAX_HISTORY_TURNS:]:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        content = str(turn.get("content", ""))[:_MAX_HISTORY_CHARS]
+        if content:
+            safe.append({"role": role, "content": content})
+    return safe
+
+
 async def answer(
     *,
     doc_hash: str,
@@ -180,6 +204,7 @@ async def answer(
     request_id = request_id or new_request_id()
     start_time = time.perf_counter()
     stage_records: list[dict] = []
+    safe_history = _sanitize_history(history)
 
     settings = get_settings()
     loaded = _load_artifacts_cached(doc_hash)
@@ -191,7 +216,7 @@ async def answer(
     # depends on TTL since doc_hash is already content-addressed.
     disk_cache = get_disk_cache() if settings.answer_cache_enabled else None
     answer_cache_key = None
-    if disk_cache is not None and not history:
+    if disk_cache is not None and not safe_history:
         answer_cache_key = disk_cache.make_key("answer", doc_hash, query.strip().lower())
         cached = disk_cache.get(answer_cache_key)
         if cached is not None:
@@ -216,7 +241,8 @@ async def answer(
         rewrite_diag: dict = {}
         with timed_stage("rewrite", request_id, sink=stage_records):
             rq = await rewrite_query(
-                query, n_variants=settings.multi_query_n, request_id=request_id, degraded_out=rewrite_diag
+                query, n_variants=settings.multi_query_n, history=safe_history,
+                request_id=request_id, degraded_out=rewrite_diag,
             )
         if rewrite_diag.get("degraded"):
             stage_records[-1]["degraded"] = True
@@ -231,8 +257,12 @@ async def answer(
                 )
                 return []
 
-        variant_queries = [query]
-        if rq.hyde and rq.hyde != query:
+        # Seed with the history-resolved standalone query, not the raw text —
+        # on a follow-up like "what are its limitations?" the raw text alone
+        # retrieves whatever passage happens to match "limitations" best,
+        # which is rarely the thing "its" actually referred to.
+        variant_queries = [rq.resolved_query or query]
+        if rq.hyde and rq.hyde not in variant_queries:
             variant_queries.append(rq.hyde)
         for v in rq.query_variants[: settings.multi_query_n]:
             if v and v not in variant_queries:
@@ -313,28 +343,18 @@ async def answer(
 
         # System turn carries the grounding/citation contract; see
         # ANSWER_SYSTEM_PROMPT for why it is not folded into the user turn.
-        messages = [{"role": "system", "content": ANSWER_SYSTEM_PROMPT}]
-        if history:
-            # Client-supplied turns are untrusted: only user/assistant roles are
-            # accepted, content is coerced to str and capped, and the history is
-            # truncated. Splicing it verbatim let a caller inject a system turn
-            # (overriding the answer prompt) or blow up cost with a huge array.
-            for turn in history[-_MAX_HISTORY_TURNS:]:
-                if not isinstance(turn, dict):
-                    continue
-                role = turn.get("role")
-                if role not in ("user", "assistant"):
-                    continue
-                content = str(turn.get("content", ""))[:_MAX_HISTORY_CHARS]
-                if content:
-                    messages.append({"role": role, "content": content})
+        # safe_history is already sanitized (see _sanitize_history) - reused
+        # here rather than re-validated a second time.
+        messages = [{"role": "system", "content": ANSWER_SYSTEM_PROMPT}, *safe_history]
         messages.append(
             {"role": "user", "content": ANSWER_USER_PROMPT.format(context=context, question=query)}
         )
 
         gen_start = time.perf_counter()
         model_used: str | None = None
-        async for delta, model_used in get_llm().stream(role="answer", messages=messages, temperature=0.2):
+        async for delta, model_used in get_llm().stream(
+            role="answer", messages=messages, temperature=0.2, max_tokens=settings.answer_max_tokens
+        ):
             answer_parts.append(delta)
             yield {"event": "token", "data": {"text": delta}}
         answer_text = "".join(answer_parts)

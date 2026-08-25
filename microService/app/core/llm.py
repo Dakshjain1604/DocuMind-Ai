@@ -154,6 +154,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         response_format: dict | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResult:
         settings = get_settings()
         models = get_models_for_role(role)
@@ -173,6 +174,8 @@ class LLMClient:
                 kwargs: dict[str, Any] = {"messages": messages, "temperature": temperature}
                 if response_format is not None:
                     kwargs["response_format"] = response_format
+                if max_tokens is not None:
+                    kwargs["max_tokens"] = max_tokens
                 resp = await self._raw_chat(model=model, **kwargs)
                 if not resp.choices:
                     raise ValueError(f"Model {model} returned empty choices list")
@@ -215,6 +218,7 @@ class LLMClient:
         role: str,
         messages: list[dict[str, str]],
         temperature: float = 0.2,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[tuple[str, str]]:
         """Yields (delta_text, model_used) tuples. Falls back across the role chain
         only if the FIRST chunk fails — once streaming has started, partial output is preserved."""
@@ -222,9 +226,12 @@ class LLMClient:
         last_err: Exception | None = None
         for idx, model in enumerate(models):
             try:
-                stream = await self._client.chat.completions.create(
-                    model=model, messages=messages, temperature=temperature, stream=True,
-                )
+                kwargs: dict[str, Any] = {
+                    "model": model, "messages": messages, "temperature": temperature, "stream": True,
+                }
+                if max_tokens is not None:
+                    kwargs["max_tokens"] = max_tokens
+                stream = await self._client.chat.completions.create(**kwargs)
                 async for chunk in stream:
                     if not chunk.choices:
                         continue

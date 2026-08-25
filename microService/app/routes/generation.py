@@ -28,6 +28,7 @@ from app.prompts.generation import (
     COMPLIANCE_AUDIT_PROMPT,
     AUDIO_BRIEFING_PROMPT,
     SLIDE_DECK_PROMPT,
+    SUGGESTED_QUESTIONS_PROMPT,
 )
 from app.indexing.store import load_artifacts, artifacts_exist
 from app.routes.schemas import (
@@ -252,6 +253,57 @@ def format_quiz_cards(items: list[dict]) -> list[dict]:
             },
         })
     return cards
+
+
+async def generate_suggested_questions(doc_hash: str, *, request_id: str | None = None) -> dict[str, Any]:
+    """3 example questions grounded in this specific document, for the Query
+    Console's empty state — replaces a static, generic set of prompts that
+    was the same for every document regardless of what it actually covered."""
+    if not artifacts_exist(doc_hash):
+        return fail(NOT_INDEXED, "doc_hash not indexed", questions=[])
+    request_id = request_id or new_request_id()
+    start = time.perf_counter()
+    loaded = load_artifacts(doc_hash)
+
+    # A handful of chunks is plenty to write plausible example questions from
+    # - this is a UI nicety, not an artifact that needs full-document coverage.
+    sample = _get_document_sample(loaded, max_chunks=6)
+
+    try:
+        r = await get_llm().complete(
+            role="answer",
+            messages=[{"role": "user", "content": SUGGESTED_QUESTIONS_PROMPT.format(content=sample.text)}],
+            temperature=0.4,
+            response_format={"type": "json_object"},
+        )
+    except Exception as e:
+        logger.error("suggested-questions generation failed: %s", e)
+        record_trace(
+            request_id, doc_hash=doc_hash, query="[suggested-questions]",
+            total_latency_ms=round((time.perf_counter() - start) * 1000, 1), error=str(e),
+        )
+        return fail(LLM_UNAVAILABLE, str(e), questions=[])
+
+    latency_ms = round((time.perf_counter() - start) * 1000, 1)
+    try:
+        data = json.loads(r.content)
+    except json.JSONDecodeError as e:
+        logger.error("suggested-questions returned non-JSON: %s", e)
+        record_trace(request_id, doc_hash=doc_hash, query="[suggested-questions]",
+                     total_latency_ms=latency_ms, error=str(e))
+        return fail(INVALID_LLM_OUTPUT, "model did not return valid JSON", questions=[])
+
+    questions = [str(q).strip() for q in data.get("questions", []) if str(q).strip()][:3]
+    record_trace(
+        request_id,
+        doc_hash=doc_hash,
+        query="[suggested-questions]",
+        total_latency_ms=latency_ms,
+        total_tokens_in=r.tokens_in,
+        total_tokens_out=r.tokens_out,
+        total_cost_usd=r.cost_usd,
+    )
+    return ok(questions=questions, coverage=sample.coverage)
 
 
 async def run_compliance_audit(doc_hash: str, *, request_id: str | None = None) -> dict[str, Any]:
