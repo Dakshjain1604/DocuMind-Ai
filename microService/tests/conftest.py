@@ -27,6 +27,12 @@ os.environ.setdefault("RAG_RERANK_MODE", "off")
 # test into another. Cache tests explicitly opt in with an isolated tmp dir.
 os.environ.setdefault("RAG_LLM_CACHE_ENABLED", "false")
 os.environ.setdefault("RAG_ANSWER_CACHE_ENABLED", "false")
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-do-not-use-in-prod-0123456789")
+# High by default so ordinary tests never trip the limiter; the dedicated
+# rate-limit test overrides these down to a small number via monkeypatch.
+os.environ.setdefault("RAG_RATE_LIMIT_QUERY_PER_MIN", "10000")
+os.environ.setdefault("RAG_RATE_LIMIT_INDEX_PER_MIN", "10000")
+os.environ.setdefault("RAG_RATE_LIMIT_STUDIO_PER_MIN", "10000")
 
 
 @pytest.fixture(autouse=True)

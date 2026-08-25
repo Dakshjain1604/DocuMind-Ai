@@ -25,6 +25,7 @@ from app.indexing.store import (
     persist_artifacts,
     load_artifacts,
     chroma_dir,
+    update_manifest,
 )
 
 
@@ -74,6 +75,7 @@ async def index_document(
     file_bytes: bytes,
     documents: list[Document],
     request_id: str | None = None,
+    owner: str | None = None,
 ) -> AsyncIterator[dict]:
     request_id = request_id or new_request_id()
     start_time = time.perf_counter()
@@ -82,6 +84,15 @@ async def index_document(
 
     if artifacts_exist(h):
         loaded = load_artifacts(h)
+        # Content-addressed dedup means a second user uploading byte-identical
+        # content reuses the existing artifacts rather than re-indexing. If
+        # that document is already owner-scoped, grant this uploader access
+        # too — otherwise they'd have paid the upload cost and gotten a 403
+        # on every subsequent query against their own upload.
+        existing_owners = loaded["manifest"].get("owners")
+        if owner and existing_owners and owner not in existing_owners:
+            loaded["manifest"]["owners"] = [*existing_owners, owner]
+            update_manifest(h, loaded["manifest"])
         record_trace(
             request_id,
             doc_hash=h,
@@ -234,6 +245,7 @@ async def index_document(
             "n_edges": g.number_of_edges(),
             "n_communities": len(set(communities.values())) if communities else 0,
             "warnings": build.warnings,
+            "owners": [owner] if owner else [],
         }
         persist_artifacts(
             h,

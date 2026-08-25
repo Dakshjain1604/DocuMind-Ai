@@ -20,30 +20,31 @@ export function AuthShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6 py-4">
+    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30">
+      <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-zinc-950/80 px-6 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="font-semibold text-lg tracking-tight">
-              DocuMind
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="h-3 w-3 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="font-display text-lg font-bold tracking-tight text-white">
+              Docu<span className="gradient-accent-text">Mind</span>
             </span>
           </Link>
           <Badge variant="secondary">{kicker}</Badge>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl items-start gap-12 px-6 py-16 sm:px-8 sm:py-24 lg:grid-cols-[1.05fr_1fr] flex-1 w-full">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-start gap-12 px-6 py-16 sm:px-8 sm:py-24 lg:grid-cols-[1.05fr_1fr]">
         <aside className="hidden flex-col gap-6 lg:flex">
-          <div className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-zinc-400">
             <ShieldCheck className="h-4 w-4" />
             <span>Enterprise Knowledge Workspace</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">{heading}</h1>
-          <p className="max-w-[44ch] text-lg leading-relaxed text-muted-foreground">
+          <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">{heading}</h1>
+          <p className="max-w-[44ch] text-lg leading-relaxed text-zinc-400">
             {sub}
           </p>
 
-          <ul className="mt-4 grid gap-3 text-sm text-muted-foreground">
+          <ul className="mt-4 grid gap-3 text-sm text-zinc-400">
             <FeatureRow
               title="Hybrid Retrieval Fusion"
               description="Vector search, BM25 and knowledge-graph traversal run in parallel and are merged with reciprocal rank fusion."
@@ -59,18 +60,18 @@ export function AuthShell({
           </ul>
         </aside>
 
-        <Card className="p-8 sm:p-10 shadow-lg border">
+        <Card className="border-white/10 bg-zinc-950/80 p-8 shadow-xl sm:p-10">
           <div className="mb-6 lg:hidden">
             <Badge variant="outline" className="mb-2">{kicker}</Badge>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="font-display text-3xl font-bold tracking-tight text-white">
               {heading}
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-zinc-400">
               {sub}
             </p>
           </div>
 
-          <div className="mb-6 hidden items-center justify-between border-b pb-3 text-xs uppercase tracking-wider text-muted-foreground font-semibold lg:flex">
+          <div className="mb-6 hidden items-center justify-between border-b border-white/10 pb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 lg:flex">
             <span>Secure Authentication</span>
             <Lock className="h-3.5 w-3.5" />
           </div>
@@ -78,14 +79,14 @@ export function AuthShell({
           {children}
 
           {footer && (
-             <div className="mt-6 border-t pt-4 text-xs text-muted-foreground">
+             <div className="mt-6 border-t border-white/10 pt-4 text-xs text-zinc-500">
               {footer}
             </div>
           )}
         </Card>
       </main>
 
-      <footer className="border-t bg-muted/20 py-6 px-6 text-xs text-muted-foreground mt-auto">
+      <footer className="mt-auto border-t border-white/10 bg-zinc-900/20 px-6 py-6 text-xs text-zinc-500">
         <div className="mx-auto max-w-6xl text-center sm:text-left">
           DocuMind AI · Hybrid GraphRAG Enterprise Platform
         </div>
@@ -100,7 +101,7 @@ export function AuthField({
 }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <label className="block space-y-2">
-      <span className="block text-sm font-medium text-foreground">
+      <span className="block text-sm font-medium text-zinc-300">
         {label}
       </span>
       <Input {...props} />
@@ -110,11 +111,11 @@ export function AuthField({
 
 function FeatureRow({ title, description }: { title: string; description: string }) {
   return (
-    <li className="flex items-start gap-3 rounded-xl border bg-muted/30 p-4 transition-colors hover:bg-muted/50">
-      <CheckCircle2 className="h-5 w-5 text-foreground shrink-0 mt-0.5" />
+    <li className="flex items-start gap-3 rounded-xl border border-white/10 bg-zinc-900/40 p-4 transition-colors hover:bg-zinc-900/70">
+      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-400" />
       <div>
-        <div className="font-semibold text-foreground text-sm">{title}</div>
-        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</div>
+        <div className="text-sm font-semibold text-white">{title}</div>
+        <div className="mt-0.5 text-xs leading-relaxed text-zinc-500">{description}</div>
       </div>
     </li>
   );

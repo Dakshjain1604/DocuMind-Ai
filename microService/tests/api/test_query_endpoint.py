@@ -20,6 +20,7 @@ async def test_query_streams_when_doc_exists(monkeypatch):
         yield {"event": "done", "data": {}}
 
     with patch("app.routes.deps.artifacts_exist", return_value=True), \
+         patch("app.routes.deps.load_artifacts", return_value={"manifest": {}}), \
          patch("app.routes.query.answer", fake_answer):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:

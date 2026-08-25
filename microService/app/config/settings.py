@@ -66,6 +66,27 @@ def _opt_str(env_key: str) -> str | None:
     return os.environ.get(env_key) or None
 
 
+def _require_secret(env_key: str, min_len: int = 16) -> str:
+    """Read a security-critical env var with no fallback default.
+
+    A prior version of this codebase defaulted JWT_SECRET to a literal
+    committed to source ("documind-secret-key-2026") when unset, which meant
+    any deployment that forgot to set the variable was signing/verifying
+    tokens with a secret visible to anyone reading the repo. The frontend
+    (frontend/lib/auth.ts::getJwtSecret) already fails fast the same way —
+    this mirrors that so the two services either both work or both refuse to
+    start, never silently trust a guessable default.
+    """
+    v = os.environ.get(env_key)
+    if not v or len(v) < min_len:
+        raise RuntimeError(
+            f"{env_key} is unset or too short (min {min_len} chars). Set it in "
+            f"microService/.env — see .env.example. It must match the frontend's "
+            f"JWT_SECRET exactly, since the frontend signs the tokens this service verifies."
+        )
+    return v
+
+
 def _resolve_rerank_mode(json_data: dict) -> str:
     explicit = os.environ.get("RAG_RERANK_MODE")
     if explicit:
@@ -150,6 +171,11 @@ class Settings:
     # Auth
     jwt_secret: str
 
+    # Rate limiting (requests per minute, per client IP)
+    rate_limit_query_per_min: int
+    rate_limit_index_per_min: int
+    rate_limit_studio_per_min: int
+
 def get_settings() -> Settings:
     rj = _load_retrieval_json()
     persist_dir = _str("RAG_PERSIST_DIR", None, rj, "./local_chroma")
@@ -210,5 +236,8 @@ def get_settings() -> Settings:
         ocr_languages=_str("RAG_OCR_LANGUAGES", None, rj, "eng"),
         sse_heartbeat_s=_float("RAG_SSE_HEARTBEAT_S", None, rj, 2.0),
         trace_db_path=_str("RAG_TRACE_DB_PATH", None, rj, f"{persist_dir}/traces.db"),
-        jwt_secret=_str("JWT_SECRET", None, rj, "documind-secret-key-2026"),
+        jwt_secret=_require_secret("JWT_SECRET"),
+        rate_limit_query_per_min=_int("RAG_RATE_LIMIT_QUERY_PER_MIN", None, rj, 20),
+        rate_limit_index_per_min=_int("RAG_RATE_LIMIT_INDEX_PER_MIN", None, rj, 5),
+        rate_limit_studio_per_min=_int("RAG_RATE_LIMIT_STUDIO_PER_MIN", None, rj, 10),
     )

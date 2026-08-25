@@ -21,15 +21,30 @@ def root():
     }
 
 
+_PROVIDER_KEY_ATTR = {
+    "openrouter": "openrouter_api_key",
+    "groq": "groq_api_key",
+    "nvidia": "nvidia_api_key",
+}
+
+
 @router.get("/health")
 def health():
-    """Liveness probe. Deliberately cheap — no model or network calls."""
+    """Liveness probe. Deliberately cheap — no model or network calls, just a
+    filesystem check and reading already-loaded config, so misconfiguration
+    (e.g. no API key for the selected provider) surfaces without adding
+    latency or spending a request against the LLM provider."""
     from pathlib import Path
 
-    persist = Path(get_settings().persist_dir)
+    s = get_settings()
+    persist = Path(s.persist_dir)
+    key_attr = _PROVIDER_KEY_ATTR.get(s.llm_provider)
+    provider_key_configured = bool(key_attr and getattr(s, key_attr, None))
     return {
-        "status": "ok",
+        "status": "ok" if provider_key_configured else "degraded",
         "persist_dir_writable": persist.exists() and persist.is_dir(),
+        "llm_provider": s.llm_provider,
+        "llm_provider_key_configured": provider_key_configured,
     }
 
 

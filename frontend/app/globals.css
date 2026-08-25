@@ -1,11 +1,6 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
-@config "../tailwind.config.ts";
-/* Supplies the `prose` classes used by the summary and masterclass panels.
-   Without it every prose-* utility silently resolves to nothing. */
 @plugin "@tailwindcss/typography";
 
 /* ─────────────────────────────────────────────────────────────
@@ -200,6 +195,16 @@ body {
   51%, 100% { opacity: 0; }
 }
 .blink { animation: blink 1s steps(1) infinite; }
+
+/* Used by the "DocuMind" wordmark (Dashboard header, and the landing/auth
+   headers once they were brought onto the same dark theme) — referenced for
+   a while with no definition anywhere, so it silently rendered as plain text. */
+.gradient-accent-text {
+  background: linear-gradient(90deg, var(--vermillion-hot), var(--accent-purple));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
 
 @keyframes ticker-pulse {
   0%, 100% { opacity: 0.4; transform: scale(0.95); }

@@ -2,14 +2,17 @@ import json
 import logging
 import time
 from typing import AsyncGenerator
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.core.auth import get_current_user
 from app.core.llm import get_llm
+from app.core.rate_limit import limiter, studio_limit
 from app.core.sse import sse_event, sse_error
 from app.indexing.store import load_artifacts, artifacts_exist
 from app.core.observability import record_trace, new_request_id
+from app.routes.deps import require_owned
 from app.prompts.generation import (
     CHAPTER_EXTRACTOR_PROMPT,
     LEARNING_DRAFT_PROMPT,
@@ -38,11 +41,15 @@ class MasterclassRequest(BaseModel):
 
 
 @router.post("/chapters")
-async def extract_chapters(req: MasterclassRequest):
+@limiter.limit(studio_limit)
+async def extract_chapters(
+    request: Request, req: MasterclassRequest, user: dict = Depends(get_current_user)
+):
     request_id = new_request_id()
     start = time.perf_counter()
     if not artifacts_exist(req.doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", total_chapters=0, chapters=[])
+    require_owned(req.doc_hash, user)
 
     loaded = load_artifacts(req.doc_hash)
     sample = _get_document_sample(loaded, max_chunks=16)
@@ -84,9 +91,13 @@ async def extract_chapters(req: MasterclassRequest):
 
 
 @router.post("/learning-draft")
-async def generate_learning_draft(req: MasterclassRequest):
+@limiter.limit(studio_limit)
+async def generate_learning_draft(
+    request: Request, req: MasterclassRequest, user: dict = Depends(get_current_user)
+):
     if not artifacts_exist(req.doc_hash):
         raise HTTPException(status_code=404, detail="Document not found")
+    require_owned(req.doc_hash, user)
 
     loaded = load_artifacts(req.doc_hash)
     sample = _get_document_sample(loaded, max_chunks=12)
@@ -135,11 +146,15 @@ async def generate_learning_draft(req: MasterclassRequest):
 
 
 @router.post("/chapter-quiz")
-async def generate_chapter_quiz(req: MasterclassRequest):
+@limiter.limit(studio_limit)
+async def generate_chapter_quiz(
+    request: Request, req: MasterclassRequest, user: dict = Depends(get_current_user)
+):
     request_id = new_request_id()
     start = time.perf_counter()
     if not artifacts_exist(req.doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", total_questions=0, cards=[])
+    require_owned(req.doc_hash, user)
 
     loaded = load_artifacts(req.doc_hash)
     sample = _get_document_sample(loaded, max_chunks=10)

@@ -16,6 +16,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from starlette.requests import Request
 
 from app.routes.generation import (
     generate_audio_briefing,
@@ -28,6 +29,22 @@ from app.routes.schemas import INVALID_LLM_OUTPUT, LLM_UNAVAILABLE, NOT_INDEXED
 
 DOC_HASH = "ab" * 32
 FAKE_LOADED = {"chroma_dir": "/nonexistent", "parents_path": None}
+
+
+def _fake_request() -> Request:
+    """A minimal real Request — slowapi's @limiter.limit() rejects anything
+    that isn't an actual starlette.requests.Request instance, which callers
+    invoking a route function directly (bypassing the ASGI app) must supply."""
+    return Request({
+        "type": "http",
+        "method": "POST",
+        "path": "/chapters",
+        "headers": [],
+        "query_string": b"",
+        "client": ("test", 0),
+        "server": ("test", 80),
+        "scheme": "http",
+    })
 
 
 class _FakeCompletion:
@@ -90,7 +107,7 @@ async def test_chapter_extraction_outage_returns_no_chapters():
          patch("app.routes.masterclass.get_llm", return_value=_patch_llm(raises=RuntimeError("down"))):
         sample.return_value.text = "doc text"
         sample.return_value.coverage = {}
-        res = await extract_chapters(MasterclassRequest(doc_hash=DOC_HASH))
+        res = await extract_chapters(_fake_request(), MasterclassRequest(doc_hash=DOC_HASH))
 
     assert res["success"] is False
     assert res["data"]["chapters"] == []

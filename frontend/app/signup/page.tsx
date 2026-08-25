@@ -45,7 +45,7 @@ export default function SignupPage() {
           Already enrolled?{" "}
           <Link
             href="/signin"
-            className="text-foreground font-semibold hover:underline inline-flex items-center gap-1 ml-1"
+            className="text-white font-semibold hover:underline inline-flex items-center gap-1 ml-1"
           >
             <span>Return to sign in</span>
             <ArrowRight className="h-3 w-3" />
@@ -87,7 +87,7 @@ export default function SignupPage() {
           type="submit"
           disabled={busy}
           size="lg"
-          className="mt-3 w-full gap-2 justify-between"
+          className="mt-3 w-full justify-between gap-2 bg-indigo-500 text-white hover:bg-indigo-400"
         >
           <span>{busy ? "Provisioning…" : "Create Workspace"}</span>
           <ArrowRight className="h-4 w-4" />

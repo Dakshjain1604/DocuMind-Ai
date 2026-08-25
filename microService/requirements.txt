@@ -41,3 +41,4 @@ pytesseract
 pdf2image
 
 pyjwt
+slowapi

@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import get_settings
+from app.core.auth import get_current_user, get_owner_id
 from app.core.observability import new_request_id
+from app.core.rate_limit import index_limit, limiter
 from app.core.sse import sse_stream_response
 from app.indexing.pipeline import index_document
 from app.indexing.store import (
@@ -16,6 +18,7 @@ from app.indexing.store import (
     list_all_documents,
     load_artifacts,
 )
+from app.routes.deps import require_owned
 from app.services.ingest import UnsafeFilename, cleanup_upload, load_documents, save_upload
 
 logger = logging.getLogger(__name__)
@@ -23,31 +26,43 @@ router = APIRouter(tags=["documents"])
 
 
 @router.get("/documents")
-def get_documents():
-    """List every indexed document in the persistent store."""
-    docs = list_all_documents()
+def get_documents(user: dict = Depends(get_current_user)):
+    """List documents visible to the caller: their own uploads plus any
+    legacy/shared document that predates per-user ownership (no owners
+    recorded at all)."""
+    user_id = get_owner_id(user)
+    docs = [
+        {k: v for k, v in d.items() if k != "owners"}
+        for d in list_all_documents()
+        if not d.get("owners") or user_id in d["owners"]
+    ]
     return {"success": True, "data": {"total": len(docs), "documents": docs}}
 
 
 @router.delete("/documents/{doc_hash}")
-def delete_document(doc_hash: str):
+def delete_document(doc_hash: str, user: dict = Depends(get_current_user)):
     """Delete one document's artifacts. Invalid hashes are rejected in store.doc_dir."""
+    require_owned(doc_hash, user)
     if not delete_document_artifacts(doc_hash):
         raise HTTPException(status_code=404, detail="Document hash not found")
     return {"success": True, "message": f"Document {doc_hash} deleted successfully"}
 
 
 @router.get("/graph/{doc_hash}")
-def get_graph(doc_hash: str):
+def get_graph(doc_hash: str, user: dict = Depends(get_current_user)):
     if not artifacts_exist(doc_hash):
         raise HTTPException(status_code=404, detail="doc_hash not indexed")
+    require_owned(doc_hash, user)
     return load_artifacts(doc_hash)["graph"]
 
 
 @router.post("/index")
+@limiter.limit(index_limit)
 async def post_index(
+    request: Request,
     files: list[UploadFile] = File(default=[]),
     file: UploadFile | None = File(default=None),
+    user: dict = Depends(get_current_user),
 ):
     """Accept a batch of documents and stream the indexing pipeline's progress."""
     settings = get_settings()
@@ -109,8 +124,11 @@ async def post_index(
 
     request_id = new_request_id()
     payload = bytes(combined_bytes)
+    owner = get_owner_id(user)
 
     def events():
-        return index_document(file_bytes=payload, documents=all_documents, request_id=request_id)
+        return index_document(
+            file_bytes=payload, documents=all_documents, request_id=request_id, owner=owner
+        )
 
     return sse_stream_response(events, request_id=request_id)

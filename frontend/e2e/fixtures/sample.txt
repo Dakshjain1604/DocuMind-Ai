@@ -1,0 +1,23 @@
+DocuMind Test Fixture: The Aurora Protocol
+
+The Aurora Protocol is a fictional data-synchronization standard invented for
+testing purposes. It was designed by the fictional Meridian Systems Working
+Group in the fictional year 2031.
+
+The Aurora Protocol's headline capability is delta-compression handoff, which
+lets two nodes exchange only the changed portion of a dataset instead of the
+whole dataset. This reduces bandwidth usage by up to ninety percent in the
+Working Group's benchmark scenarios.
+
+The protocol defines three roles: the Anchor, which holds the canonical copy
+of the dataset; the Relay, which forwards delta-compression handoff packets
+between anchors; and the Witness, which independently verifies that a handoff
+completed without data loss.
+
+A second capability, quorum rollback, allows a majority of Witnesses to force
+any Anchor back to its last verified state if corruption is detected. Quorum
+rollback requires at least three Witnesses to agree before it can execute.
+
+The Meridian Systems Working Group published the Aurora Protocol specification
+under the name "Aurora Protocol v1" and reports that ninety percent bandwidth
+reduction as its central performance claim.

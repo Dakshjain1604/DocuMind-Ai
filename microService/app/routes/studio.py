@@ -6,11 +6,13 @@ substitute invented content when the model is unavailable.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Request, Response
 
+from app.core.auth import get_current_user
 from app.core.observability import new_request_id
+from app.core.rate_limit import limiter, studio_limit
 from app.core.sse import sse_stream_response
-from app.routes.deps import DocHashBody, require_indexed
+from app.routes.deps import DocHashBody, require_indexed, require_owned
 from app.routes.generation import (
     generate_audio_briefing,
     generate_quiz_cards,
@@ -23,9 +25,11 @@ router = APIRouter(tags=["studio"])
 
 
 @router.post("/summary")
-async def post_summary(body: DocHashBody):
+@limiter.limit(studio_limit)
+async def post_summary(request: Request, body: DocHashBody, user: dict = Depends(get_current_user)):
     """Stream an executive summary of the document."""
     require_indexed(body.doc_hash)
+    require_owned(body.doc_hash, user)
     request_id = new_request_id()
 
     def events():
@@ -35,28 +39,44 @@ async def post_summary(body: DocHashBody):
 
 
 @router.post("/quiz")
-async def post_quiz(body: DocHashBody, response: Response):
+@limiter.limit(studio_limit)
+async def post_quiz(
+    request: Request, body: DocHashBody, response: Response, user: dict = Depends(get_current_user)
+):
+    require_owned(body.doc_hash, user)
     request_id = new_request_id()
     response.headers["X-Request-Id"] = request_id
     return await generate_quiz_cards(body.doc_hash, request_id=request_id)
 
 
 @router.post("/compliance-audit")
-async def post_compliance_audit(body: DocHashBody, response: Response):
+@limiter.limit(studio_limit)
+async def post_compliance_audit(
+    request: Request, body: DocHashBody, response: Response, user: dict = Depends(get_current_user)
+):
+    require_owned(body.doc_hash, user)
     request_id = new_request_id()
     response.headers["X-Request-Id"] = request_id
     return await run_compliance_audit(body.doc_hash, request_id=request_id)
 
 
 @router.post("/audio-briefing")
-async def post_audio_briefing(body: DocHashBody, response: Response):
+@limiter.limit(studio_limit)
+async def post_audio_briefing(
+    request: Request, body: DocHashBody, response: Response, user: dict = Depends(get_current_user)
+):
+    require_owned(body.doc_hash, user)
     request_id = new_request_id()
     response.headers["X-Request-Id"] = request_id
     return await generate_audio_briefing(body.doc_hash, request_id=request_id)
 
 
 @router.post("/slide-deck")
-async def post_slide_deck(body: DocHashBody, response: Response):
+@limiter.limit(studio_limit)
+async def post_slide_deck(
+    request: Request, body: DocHashBody, response: Response, user: dict = Depends(get_current_user)
+):
+    require_owned(body.doc_hash, user)
     request_id = new_request_id()
     response.headers["X-Request-Id"] = request_id
     return await generate_slide_deck(body.doc_hash, request_id=request_id)

@@ -31,11 +31,19 @@ logs/
 # Uploads and generated files
 microService/app/uploaded_files/
 microService/uploaded_files/
+# The actual default (RAG_UPLOAD_DIR in settings.py) — the two patterns above
+# never matched it, so real uploads (which can carry PII) were unprotected.
+microService/tmp/uploaded_files/
 
 # Frontend environment files
 frontend/env
 frontend/node_modules
 frontend/tmp/
+
+# Frontend test artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # Microservice environment files
 microService/.env

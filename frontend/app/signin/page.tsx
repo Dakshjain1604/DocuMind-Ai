@@ -44,7 +44,7 @@ export default function SigninPage() {
           New to DocuMind?{" "}
           <Link
             href="/signup"
-            className="text-foreground font-semibold hover:underline inline-flex items-center gap-1 ml-1"
+            className="text-white font-semibold hover:underline inline-flex items-center gap-1 ml-1"
           >
             <span>Request access</span>
             <ArrowRight className="h-3 w-3" />
@@ -76,7 +76,7 @@ export default function SigninPage() {
           type="submit"
           disabled={busy}
           size="lg"
-          className="mt-3 w-full gap-2 justify-between"
+          className="mt-3 w-full justify-between gap-2 bg-indigo-500 text-white hover:bg-indigo-400"
         >
           <span>{busy ? "Opening session…" : "Open Session"}</span>
           <ArrowRight className="h-4 w-4" />

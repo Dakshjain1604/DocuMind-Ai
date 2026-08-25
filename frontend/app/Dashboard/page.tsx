@@ -153,6 +153,10 @@ export default function Dashboard() {
   // System Telemetry Stats
   const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
 
+  // Signed-in identity (the dashboard chrome never showed this before, despite
+  // the JWT carrying it since signin).
+  const [currentUser, setCurrentUser] = useState<{ name?: string; email?: string } | null>(null);
+
   // Multi-file Intake Queue Management
   const [intakeFiles, setIntakeFiles] = useState<
     Array<{ id: string; name: string; size: number; file: File; status: "queued" | "indexing" | "ready" | "error" }>
@@ -225,6 +229,10 @@ export default function Dashboard() {
   useEffect(() => {
     loadLibrary();
     loadTelemetry();
+    axios
+      .get("/api/auth/me")
+      .then((res) => setCurrentUser({ name: res.data.name, email: res.data.email }))
+      .catch(() => setCurrentUser(null));
   }, [loadLibrary, loadTelemetry]);
 
   const selectActiveDocument = (hash: string) => {
@@ -527,6 +535,11 @@ export default function Dashboard() {
                 <span>Active Batch: {shortHash(docHash)}</span>
               </div>
             )}
+            {currentUser && (currentUser.name || currentUser.email) && (
+              <span className="hidden md:inline font-mono text-xs text-zinc-500">
+                {currentUser.name || currentUser.email}
+              </span>
+            )}
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
               Sign Out
             </Button>
@@ -562,6 +575,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={doc.doc_hash}
+                    data-testid="doc-library-item"
                     onClick={() => selectActiveDocument(doc.doc_hash)}
                     className={`group cursor-pointer flex items-center justify-between rounded-xl border p-3.5 transition-all ${
                       isActive

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight } from "lucide-react";
+import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight, Gauge } from "lucide-react";
 import { CitationChip } from "./CitationChip";
 import { readSseStream } from "@/lib/sse";
+import { parseCitationSegments } from "@/lib/citations";
 import { Button } from "@/components/ui/button";
 import { Citation } from "../Dashboard/types";
+import { TracePanel } from "../Dashboard/components/TracePanel";
 
 type Turn = {
   id: string;
@@ -14,29 +16,20 @@ type Turn = {
   citations: Citation[];
   busy: boolean;
   error?: string | null;
+  requestId?: string | null;
 };
-
-const CITATION_RE = /([\[【]\d+(?:[,，]\d+)*[\]】])/g;
-const CITATION_INNER = /^[\[【](\d+(?:[,，]\d+)*)[\]】]$/;
 
 function renderWithCitations(
   text: string,
   citations: Citation[],
   onCite: (id: number) => void
 ) {
-  const parts = text.split(CITATION_RE);
-  return parts.map((p, i) => {
-    const m = p.match(CITATION_INNER);
-    if (!m) return <span key={i}>{p}</span>;
+  return parseCitationSegments(text).map((seg, i) => {
+    if (seg.type === "text") return <span key={i}>{seg.value}</span>;
     return (
       <span key={i}>
-        {m[1].split(/[,，]/).map((nStr) => (
-          <CitationChip
-            key={nStr}
-            n={Number(nStr)}
-            citations={citations}
-            onClick={onCite}
-          />
+        {seg.ids.map((n) => (
+          <CitationChip key={n} n={n} citations={citations} onClick={onCite} />
         ))}
       </span>
     );
@@ -108,6 +101,8 @@ export function ChatStream({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ doc_hash: docHash, query: q }),
       });
+      const requestId = r.headers.get("X-Request-Id");
+      if (requestId) updateTurn(t.id, { requestId });
       let acc = "";
       await readSseStream(r, {
         onError: (message) => updateTurn(t.id, { error: message, answer: acc }),
@@ -254,6 +249,7 @@ function TurnBlock({
   onCopy: () => void;
   isCopied: boolean;
 }) {
+  const [traceOpen, setTraceOpen] = useState(false);
   return (
     <article className="group space-y-3">
       {/* Question line */}
@@ -268,24 +264,41 @@ function TurnBlock({
         </div>
 
         {turn.answer && !turn.busy && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCopy}
-            className="h-7 px-2 font-mono text-[11px] text-zinc-400 hover:text-white"
-          >
-            {isCopied ? (
-              <span className="inline-flex items-center gap-1 text-emerald-400">
-                <Check className="h-3.5 w-3.5" /> Copied
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1">
-                <Copy className="h-3.5 w-3.5" /> Copy
-              </span>
+          <div className="flex items-center gap-1">
+            {turn.requestId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTraceOpen((o) => !o)}
+                aria-expanded={traceOpen}
+                className="h-7 px-2 font-mono text-[11px] text-zinc-400 hover:text-white"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <Gauge className="h-3.5 w-3.5" /> {traceOpen ? "Hide trace" : "View trace"}
+                </span>
+              </Button>
             )}
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCopy}
+              className="h-7 px-2 font-mono text-[11px] text-zinc-400 hover:text-white"
+            >
+              {isCopied ? (
+                <span className="inline-flex items-center gap-1 text-emerald-400">
+                  <Check className="h-3.5 w-3.5" /> Copied
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <Copy className="h-3.5 w-3.5" /> Copy
+                </span>
+              )}
+            </Button>
+          </div>
         )}
       </div>
+
+      {traceOpen && turn.requestId && <TracePanel requestId={turn.requestId} />}
 
       {/* Citations rail */}
       {turn.citations.length > 0 && (

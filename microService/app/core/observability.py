@@ -51,7 +51,18 @@ def new_request_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-MODEL_PRICING: dict[str, tuple[float, float]] = {}
+# $ per 1K tokens, (input, output). Best-effort snapshot of public list prices
+# for the non-":free" models named in .env.example's fallback chains — good
+# enough to keep /telemetry/stats cost figures from being unconditionally
+# null/zero, not a billing-accurate source of truth. Anything not listed here
+# (including every ":free"-suffixed OpenRouter model, handled separately
+# below) returns None rather than a guessed number.
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "openai/gpt-4o-mini": (0.00015, 0.00060),
+    "llama-3.3-70b-versatile": (0.00059, 0.00079),
+    "llama-3.1-8b-instant": (0.00005, 0.00008),
+    "deepseek-r1-distill-llama-70b": (0.00075, 0.00099),
+}
 
 
 def estimate_cost_usd(model: str, tokens_in: int, tokens_out: int) -> float | None:

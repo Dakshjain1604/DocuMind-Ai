@@ -89,6 +89,11 @@ def persist_artifacts(
     return d
 
 
+def update_manifest(doc_hash: str, manifest: dict[str, Any]) -> None:
+    """Rewrite manifest.json in place (e.g. to append a new document owner)."""
+    _write_atomic(doc_dir(doc_hash) / "manifest.json", json.dumps(manifest, ensure_ascii=False))
+
+
 def load_artifacts(doc_hash: str) -> dict[str, Any]:
     d = doc_dir(doc_hash)
     out: dict[str, Any] = {
@@ -122,6 +127,7 @@ def list_all_documents() -> list[dict[str, Any]]:
                     "sources": manifest.get("sources", []),
                     "n_chunks": manifest.get("n_chunks", 0),
                     "created_at": manifest.get("created_at", d.stat().st_mtime),
+                    "owners": manifest.get("owners", []),
                 })
             except Exception:
                 pass
