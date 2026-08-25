@@ -16,16 +16,18 @@ type GraphData = {
   community_summaries?: Record<string, string>;
 };
 
-// Atlas palette for community groups
+// Atlas palette for community groups - deliberately no indigo/purple/violet,
+// so the one graph screen with a real reason for multiple hues doesn't undo
+// the rest of the app's restraint on that color family.
 const COMMUNITY_COLORS = [
-  "#6366f1", // indigo
-  "#38bdf8", // cyan
+  "#38bdf8", // sky
   "#10b981", // emerald
   "#fbbf24", // amber
-  "#c084fc", // purple
   "#f472b6", // pink
-  "#a855f7", // violet
-  "#34d399", // teal
+  "#fb923c", // orange
+  "#2dd4bf", // teal
+  "#60a5fa", // blue
+  "#a3e635", // lime
 ];
 
 export function GraphView({
@@ -96,7 +98,7 @@ export function GraphView({
   if (!data) {
     return (
       <div className="flex h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-zinc-950/80 font-mono text-xs uppercase tracking-wider text-zinc-400">
-        <RefreshCw className="mr-2 h-4 w-4 animate-spin text-indigo-400" />
+        <RefreshCw className="mr-2 h-4 w-4 animate-spin text-zinc-400" />
         <span>Loading Knowledge Atlas Graph…</span>
       </div>
     );
@@ -115,7 +117,7 @@ export function GraphView({
       {/* Header bar */}
       <div className="flex flex-wrap items-center justify-between border-b border-white/10 pb-3 font-mono text-xs uppercase tracking-wider text-zinc-400">
         <div className="flex items-center gap-2">
-          <Network className="h-4 w-4 text-indigo-400" />
+          <Network className="h-4 w-4 text-zinc-400" />
           <span className="font-semibold text-white">Knowledge Cartography Atlas</span>
         </div>
         {stats && (
@@ -151,7 +153,7 @@ export function GraphView({
             if (isHi) {
               ctx.beginPath();
               ctx.arc(node.x ?? 0, node.y ?? 0, r + 4, 0, 2 * Math.PI);
-              ctx.strokeStyle = "#818cf8";
+              ctx.strokeStyle = "#38bdf8";
               ctx.lineWidth = 1.5 / scale;
               ctx.stroke();
             }

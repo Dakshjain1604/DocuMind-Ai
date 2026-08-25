@@ -148,10 +148,10 @@ export function ChatStream({
                 key={i}
                 onClick={() => askQuery(sq)}
                 disabled={busy}
-                className="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-2.5 font-mono text-xs text-zinc-300 transition-all hover:border-indigo-500/50 hover:bg-zinc-900/90 hover:text-white disabled:opacity-50 text-left"
+                className="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-2.5 font-mono text-xs text-zinc-300 transition-all hover:border-white/30 hover:bg-zinc-900/90 hover:text-white disabled:opacity-50 text-left"
               >
                 <span>{sq}</span>
-                <ArrowRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-indigo-400 transition-transform group-hover:translate-x-1 shrink-0" />
+                <ArrowRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white transition-transform group-hover:translate-x-1 shrink-0" />
               </button>
             ))}
           </div>
@@ -180,7 +180,7 @@ export function ChatStream({
 
       {/* Input row */}
       <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-zinc-950/80 p-2 shadow-xl backdrop-blur-xl">
-        <div className="flex items-center px-3 font-mono text-xs font-bold uppercase tracking-wider text-indigo-400 shrink-0">
+        <div className="flex items-center px-3 font-mono text-xs font-bold uppercase tracking-wider text-zinc-400 shrink-0">
           <Terminal className="h-4 w-4 mr-1.5" />
           <span>QRY</span>
         </div>
@@ -307,9 +307,9 @@ function TurnBlock({
             <span
               key={c.n}
               onClick={() => onCite(c.chunk_id)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 font-mono text-[10px] text-indigo-300 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 font-mono text-[10px] text-sky-300 cursor-pointer hover:border-sky-500 hover:bg-sky-500/20 transition-colors"
             >
-              <span className="font-bold text-indigo-400">
+              <span className="font-bold text-sky-400">
                 {String(c.n).padStart(2, "0")}
               </span>
               <span className="text-zinc-500">/</span>
@@ -320,12 +320,12 @@ function TurnBlock({
       )}
 
       {/* Answer body */}
-      <div className="border-l-2 border-indigo-500/50 pl-4 py-1">
+      <div className="border-l-2 border-white/15 pl-4 py-1">
         {turn.answer ? (
           <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-200">
             {renderWithCitations(turn.answer, turn.citations, onCite)}
             {turn.busy && (
-              <span className="blink ml-1 text-indigo-400 font-mono">▮</span>
+              <span className="blink ml-1 text-zinc-300 font-mono">▮</span>
             )}
           </div>
         ) : (

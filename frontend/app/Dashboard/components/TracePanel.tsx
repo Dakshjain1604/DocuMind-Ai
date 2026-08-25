@@ -34,7 +34,7 @@ type Trace = {
 };
 
 const LEG_STYLE: Record<string, string> = {
-  vector: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300",
+  vector: "border-sky-500/30 bg-sky-500/10 text-sky-300",
   bm25: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   graph: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   graph_community: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300",
@@ -101,16 +101,16 @@ export function TracePanel({ requestId }: { requestId: string }) {
       {/* Summary strip */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-zinc-400">
         <span className="inline-flex items-center gap-1.5">
-          <Gauge className="h-3.5 w-3.5 text-indigo-400" />
+          <Gauge className="h-3.5 w-3.5 text-zinc-400" />
           {trace.total_latency_ms != null ? `${Math.round(trace.total_latency_ms)}ms total` : "latency n/a"}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <Activity className="h-3.5 w-3.5 text-indigo-400" />
+          <Activity className="h-3.5 w-3.5 text-zinc-400" />
           {trace.total_tokens_in ?? 0} in / {trace.total_tokens_out ?? 0} out tokens
         </span>
         {trace.total_cost_usd != null && (
           <span className="inline-flex items-center gap-1.5">
-            <Coins className="h-3.5 w-3.5 text-indigo-400" />
+            <Coins className="h-3.5 w-3.5 text-zinc-400" />
             ${trace.total_cost_usd.toFixed(4)}
           </span>
         )}
@@ -139,7 +139,7 @@ export function TracePanel({ requestId }: { requestId: string }) {
               <span className="w-32 shrink-0 truncate text-zinc-400">{s.stage}</span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
                 <div
-                  className={`h-full rounded-full ${s.error ? "bg-red-500/60" : "bg-indigo-500/60"}`}
+                  className={`h-full rounded-full ${s.error ? "bg-red-500/60" : "bg-zinc-300"}`}
                   style={{ width: `${Math.max(4, (s.latency_ms / maxLatency) * 100)}%` }}
                 />
               </div>

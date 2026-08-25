@@ -11,7 +11,7 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
 
   const variants = {
     default:
-      "border border-indigo-500/30 bg-indigo-500/10 text-indigo-300",
+      "border border-white/20 bg-white/10 text-zinc-100",
     secondary:
       "border border-white/10 bg-zinc-900/60 text-zinc-400",
     outline:

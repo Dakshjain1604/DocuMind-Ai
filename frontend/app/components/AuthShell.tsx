@@ -20,11 +20,11 @@ export function AuthShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30">
+    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-white/20">
       <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-zinc-950/80 px-6 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="h-3 w-3 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="h-3 w-3 rounded-full bg-white animate-pulse" />
             <span className="font-display text-lg font-bold tracking-tight text-white">
               Docu<span className="gradient-accent-text">Mind</span>
             </span>
@@ -112,7 +112,7 @@ export function AuthField({
 function FeatureRow({ title, description }: { title: string; description: string }) {
   return (
     <li className="flex items-start gap-3 rounded-xl border border-white/10 bg-zinc-900/40 p-4 transition-colors hover:bg-zinc-900/70">
-      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-400" />
+      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-zinc-400" />
       <div>
         <div className="text-sm font-semibold text-white">{title}</div>
         <div className="mt-0.5 text-xs leading-relaxed text-zinc-500">{description}</div>

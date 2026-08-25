@@ -98,7 +98,7 @@ export const QuizArena: React.FC<QuizArenaProps> = ({ cards }) => {
                   onClick={() => setFilterDifficulty(diff)}
                   className={`rounded-lg px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
                     filterDifficulty === diff
-                      ? "bg-indigo-600 text-white font-bold shadow-md"
+                      ? "bg-white text-zinc-950 font-bold shadow-md"
                       : "text-zinc-400 hover:text-white"
                   }`}
                 >
@@ -124,7 +124,7 @@ export const QuizArena: React.FC<QuizArenaProps> = ({ cards }) => {
         {/* Progress bar line */}
         <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
           <div
-            className="h-full bg-indigo-500 transition-all duration-300 shadow-sm shadow-indigo-500/50"
+            className="h-full bg-white transition-all duration-300"
             style={{ width: `${(totalAnswered / Math.max(cards.length, 1)) * 100}%` }}
           />
         </div>
@@ -211,7 +211,7 @@ const QuizCardWithCallback: React.FC<{
           {card.metadata?.difficulty && (
             <Badge variant="outline">{card.metadata.difficulty}</Badge>
           )}
-          <span className="text-indigo-400 font-semibold">{card.title}</span>
+          <span className="text-zinc-300 font-semibold">{card.title}</span>
         </div>
       </div>
 
@@ -233,7 +233,7 @@ const QuizCardWithCallback: React.FC<{
           let chipCls = "font-mono text-xs uppercase font-bold tracking-wider ";
 
           if (!showResult) {
-            cls += "border-white/10 bg-zinc-900/60 text-zinc-200 hover:border-indigo-500/50 hover:bg-zinc-800/80";
+            cls += "border-white/10 bg-zinc-900/60 text-zinc-200 hover:border-white/30 hover:bg-zinc-800/80";
             chipCls += "text-zinc-500";
           } else if (isPicked && isCorrect) {
             cls += "border-emerald-500/50 bg-emerald-500/15 text-white font-medium";

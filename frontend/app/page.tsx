@@ -40,12 +40,12 @@ export default async function Home() {
   const totalRequests = telemetry?.total_requests ?? 0;
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30">
+    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-white/20">
       {/* ── HEADER ─────────────────────────────── */}
       <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-zinc-950/80 backdrop-blur-xl">
         <div className="container mx-auto flex h-14 items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <span className="h-3 w-3 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="h-3 w-3 rounded-full bg-white animate-pulse" />
             <span className="font-display text-lg font-bold tracking-tight text-white">
               Docu<span className="gradient-accent-text">Mind</span>
             </span>
@@ -59,7 +59,7 @@ export default async function Home() {
               Sign In
             </Link>
             <Link href="/Dashboard">
-              <Button size="sm" className="gap-2 bg-indigo-500 text-white hover:bg-indigo-400">
+              <Button size="sm" className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200">
                 Launch Studio
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -88,7 +88,7 @@ export default async function Home() {
 
           <div className="flex flex-col items-center gap-4 sm:flex-row">
             <Link href="/Dashboard">
-              <Button size="lg" className="h-12 gap-2 bg-indigo-500 px-8 text-white hover:bg-indigo-400">
+              <Button size="lg" className="h-12 gap-2 bg-white px-8 text-zinc-950 hover:bg-zinc-200">
                 Launch Studio Workspace
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -155,7 +155,7 @@ export default async function Home() {
             {INSTRUMENTS.map((it) => (
               <Card
                 key={it.title}
-                className="flex flex-col border-white/10 bg-zinc-950/80 p-6 transition-colors hover:border-indigo-500/40"
+                className="flex flex-col border-white/10 bg-zinc-950/80 p-6 transition-colors hover:border-white/30"
               >
                 <div className="mb-4">
                   <Badge variant="default" className="mb-4">{it.badge}</Badge>

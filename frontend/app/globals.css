@@ -21,7 +21,7 @@
   --ink-card-hover: rgba(28, 28, 35, 0.9);
   --ink-input: #121215;
   --rule: rgba(255, 255, 255, 0.09);
-  --rule-hot: rgba(99, 102, 241, 0.35);
+  --rule-hot: rgba(255, 255, 255, 0.35);
 
   --paper: #fafafa;
   --paper-2: #d4d4d8;
@@ -36,8 +36,11 @@
   --teal: #38bdf8;
   --moss: #10b981;
 
-  --serif: var(--font-display), "Inter", -apple-system, system-ui, sans-serif;
-  --sans: var(--font-body), "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* .font-display used to load a separate high-contrast serif (Libre Bodoni)
+     for headlines - simplified to the same sans-serif as the rest of the
+     app, just bold, per the "simple, formal, high-readability" direction. */
+  --serif: var(--font-sans), "Inter", -apple-system, system-ui, sans-serif;
+  --sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
   --mono: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -197,13 +200,12 @@ body {
 .blink { animation: blink 1s steps(1) infinite; }
 
 /* Used by the "DocuMind" wordmark (Dashboard header, and the landing/auth
-   headers once they were brought onto the same dark theme) — referenced for
-   a while with no definition anywhere, so it silently rendered as plain text. */
+   headers once they were brought onto the same dark theme). Plain white,
+   not a gradient - the app's palette is neutral (white/zinc) with a single
+   sparing blue accent reserved for citations, not a purple/indigo brand
+   gradient repeated across every header. */
 .gradient-accent-text {
-  background: linear-gradient(90deg, var(--vermillion-hot), var(--accent-purple));
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+  color: #ffffff;
 }
 
 @keyframes ticker-pulse {
@@ -216,19 +218,19 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--vermillion);
+  outline: 2px solid rgba(255, 255, 255, 0.6);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: var(--vermillion); }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
 
 main, header, footer, nav, aside {
   position: relative;

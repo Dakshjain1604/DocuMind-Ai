@@ -75,7 +75,7 @@ export function AudioSlidesPanel({
         <Card className="p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-xs text-zinc-400 font-semibold">
             <span className="flex items-center gap-2">
-              <Volume2 className="h-4 w-4 text-indigo-400" />
+              <Volume2 className="h-4 w-4 text-zinc-400" />
               <span>Executive Podcast Script</span>
             </span>
             <Button variant="ghost" size="sm" onClick={audio.onCopy}>
@@ -120,7 +120,7 @@ export function AudioSlidesPanel({
                   <ul className="space-y-2 font-sans text-sm text-zinc-300">
                     {slide.bullets?.map((b, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        <span className="text-indigo-400 font-bold">•</span>
+                        <span className="text-zinc-400 font-bold">•</span>
                         <span>{b}</span>
                       </li>
                     ))}

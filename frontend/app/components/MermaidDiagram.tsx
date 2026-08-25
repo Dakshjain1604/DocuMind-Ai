@@ -17,11 +17,13 @@ mermaid.initialize({
   themeVariables: {
     darkMode: true,
     background: "#18181b",
-    primaryColor: "#6366f1",
+    primaryColor: "#27272a",
     primaryTextColor: "#ffffff",
-    primaryBorderColor: "#818cf8",
+    primaryBorderColor: "#71717a",
+    // sky is the one sparing accent color this app uses (also citations) -
+    // everything else in the diagram is neutral zinc, not indigo/purple.
     lineColor: "#38bdf8",
-    secondaryColor: "#a855f7",
+    secondaryColor: "#3f3f46",
     tertiaryColor: "#34d399",
   },
   // Diagram source is LLM-generated, so it is untrusted input. "strict"
@@ -67,7 +69,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   if (error || !svg) {
     return (
       <div className="my-4 glass-panel rounded-xl p-4 font-mono text-[11px] text-zinc-400 overflow-x-auto">
-        <pre className="text-indigo-300">{chart}</pre>
+        <pre className="text-zinc-300">{chart}</pre>
       </div>
     );
   }
@@ -75,7 +77,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   return (
     <div
       ref={containerRef}
-      className="my-6 glass-panel rounded-2xl p-6 overflow-x-auto flex justify-center border border-indigo-500/20 bg-zinc-950/80 shadow-2xl"
+      className="my-6 glass-panel rounded-2xl p-6 overflow-x-auto flex justify-center border border-white/10 bg-zinc-950/80 shadow-2xl"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

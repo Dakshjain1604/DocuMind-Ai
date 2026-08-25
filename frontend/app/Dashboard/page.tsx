@@ -10,7 +10,6 @@ import {
   HelpCircle,
   BookOpen,
   UploadCloud,
-  CheckCircle2,
   Trash2,
   Terminal,
   Download,
@@ -21,16 +20,17 @@ import {
   Zap,
   ShieldAlert,
   Presentation,
+  Network,
+  Plus,
+  LogOut,
 } from "lucide-react";
 
 import { QuizArena } from "../components/QuizArena";
 import { ChatStream } from "../components/ChatStream";
 import { GraphView } from "../components/GraphView";
 import { MasterclassStudio } from "../components/MasterclassStudio";
-import { Homecard } from "../components/HomeCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AuditFinding,
@@ -82,12 +82,6 @@ const ACCEPTED_EXTS = [".pdf", ".txt", ".md", ".doc", ".docx"];
 function shortHash(h: string | null): string {
   if (!h) return "—";
   return `${h.slice(0, 6)}…${h.slice(-4)}`;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function hasAcceptedExt(name: string): boolean {
@@ -511,381 +505,252 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const TOOLS: { view: View; label: string; icon: React.ReactNode }[] = [
+    { view: "chat", label: "Query Console", icon: <Sparkles className="h-4 w-4" /> },
+    { view: "summary", label: "Summary", icon: <FileText className="h-4 w-4" /> },
+    { view: "quiz", label: "Quiz Arena", icon: <HelpCircle className="h-4 w-4" /> },
+    { view: "masterclass", label: "Masterclass", icon: <BookOpen className="h-4 w-4" /> },
+    { view: "graph", label: "Knowledge Atlas", icon: <Network className="h-4 w-4" /> },
+    { view: "audit", label: "Compliance Audit", icon: <ShieldAlert className="h-4 w-4" /> },
+    { view: "slides", label: "Audio & Slides", icon: <Presentation className="h-4 w-4" /> },
+  ];
+
+  const VIEW_TITLES: Record<View, string> = {
+    none: "",
+    summary: "Summary",
+    chat: "Query Console",
+    quiz: "Quiz Arena",
+    graph: "Knowledge Atlas",
+    masterclass: "Masterclass",
+    audit: "Compliance Audit",
+    audio: "Audio Briefing",
+    slides: "Audio & Slide Deck",
+  };
+
   return (
-    <div className="relative min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-indigo-500/30">
-      {/* ── TOP NAVIGATION BAR ────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/80 backdrop-blur-xl px-6 py-3.5">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2.5">
-              <span className="h-3 w-3 rounded-full bg-indigo-500 animate-pulse" />
-              <span className="font-display text-xl font-bold tracking-tight text-white">
-                Docu<span className="gradient-accent-text">Mind</span>
-              </span>
-            </Link>
-            <Badge variant="default" className="hidden sm:inline-flex">
-              Enterprise Studio Workspace
-            </Badge>
-          </div>
+    <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-100 font-sans selection:bg-white/20">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_EXTS.join(",")}
+        onChange={handleFileChange}
+        className="hidden"
+      />
 
-          <div className="flex items-center gap-3">
-            {docHash && (
-              <div className="hidden md:flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/60 px-3 py-1 font-mono text-xs text-zinc-400">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Active Batch: {shortHash(docHash)}</span>
-              </div>
-            )}
-            {currentUser && (currentUser.name || currentUser.email) && (
-              <span className="hidden md:inline font-mono text-xs text-zinc-500">
-                {currentUser.name || currentUser.email}
-              </span>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      {/* ── LEFT SIDEBAR ──────────────────────────────────────────── */}
+      <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-zinc-950">
+        <Link href="/" className="flex items-center gap-2.5 px-4 py-4">
+          <span className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+          <span className="font-display text-base font-bold tracking-tight text-white">
+            DocuMind
+          </span>
+        </Link>
 
-      {/* ── MAIN DASHBOARD LAYOUT ─────────────────────────────────── */}
-      <main className="mx-auto max-w-7xl flex-1 px-6 py-8 w-full space-y-8">
-        {/* ── PERSISTENT DOCUMENT LIBRARY & TELEMETRY ───────────────── */}
-        {libraryDocs.length > 0 && (
-          <Card className="border-indigo-500/20 bg-zinc-950/80 p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-xs uppercase tracking-wider text-indigo-400 font-semibold">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                <span>Persistent Document Store Library ({libraryDocs.length} Indexed Documents)</span>
-              </div>
-              {telemetryStats && (
-                <div className="hidden sm:flex items-center gap-4 text-[10px] text-zinc-400">
-                  <span>Requests: {telemetryStats.total_requests ?? 0}</span>
-                  <span>Avg Latency: {telemetryStats.avg_latency_ms ?? 0}ms</span>
-                  <span>
-                    Tokens:{" "}
-                    {(telemetryStats.total_tokens_in ?? 0) + (telemetryStats.total_tokens_out ?? 0)}
-                  </span>
-                </div>
-              )}
-            </div>
+        {/* Upload */}
+        <div
+          className="px-3"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files?.length) {
+              addFilesToQueue(Array.from(e.dataTransfer.files));
+            }
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              isDragging
+                ? "border-white/40 bg-white/10 text-white"
+                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+            }`}
+          >
+            <Plus className="h-4 w-4" />
+            <span>Upload document</span>
+          </button>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {libraryDocs.map((doc) => {
-                const isActive = docHash === doc.doc_hash;
-                return (
-                  <div
-                    key={doc.doc_hash}
-                    data-testid="doc-library-item"
-                    onClick={() => selectActiveDocument(doc.doc_hash)}
-                    className={`group cursor-pointer flex items-center justify-between rounded-xl border p-3.5 transition-all ${
-                      isActive
-                        ? "border-indigo-500/60 bg-indigo-500/10 shadow-lg shadow-indigo-500/10"
-                        : "border-white/10 bg-zinc-900/40 hover:border-white/20 hover:bg-zinc-900/80"
-                    }`}
+          {intakeFiles.length > 0 && (
+            <div className="mt-2 space-y-1.5 rounded-lg border border-white/10 bg-zinc-900/60 p-2">
+              {intakeFiles.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate text-zinc-300">{item.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${item.name} from queue`}
+                    onClick={() => removeFileFromQueue(item.id)}
+                    className="shrink-0 text-zinc-500 hover:text-red-400 transition-colors"
                   >
-                    <div className="flex items-center gap-3 overflow-hidden pr-2">
-                      <FileText className={`h-4 w-4 shrink-0 ${isActive ? "text-indigo-400" : "text-zinc-500"}`} />
-                      <div className="overflow-hidden">
-                        <div className="font-mono text-xs font-semibold text-white truncate">{doc.filename}</div>
-                        <div className="font-mono text-[10px] text-zinc-500">
-                          {shortHash(doc.doc_hash)} · {doc.n_chunks} chunks
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {isActive && <Badge variant="success">ACTIVE</Badge>}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteLibraryDoc(doc.doc_hash);
-                        }}
-                        className="text-zinc-500 hover:text-red-400 transition-colors p-1"
-                        title="Delete document"
-                          aria-label="Delete document"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                onClick={triggerUpload}
+                disabled={indexing}
+                size="sm"
+                className="mt-1 w-full gap-1.5 bg-white text-zinc-950 hover:bg-zinc-200"
+              >
+                {indexing ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Indexing…</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Index {intakeFiles.length} file{intakeFiles.length > 1 ? "s" : ""}</span>
+                  </>
+                )}
+              </Button>
             </div>
-          </Card>
+          )}
+
+          {intakeError && (
+            <div role="alert" aria-live="polite" className="mt-2 flex items-start gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{intakeError}</span>
+            </div>
+          )}
+
+          {progressLog.length > 0 && (
+            <div className="mt-2 max-h-28 overflow-y-auto space-y-1 rounded-lg border border-white/10 bg-zinc-950 p-2 font-mono text-[10px]">
+              <div className="flex items-center gap-1.5 text-zinc-500 pb-1">
+                <Terminal className="h-3 w-3" />
+                <span>{progressLog.length} events</span>
+              </div>
+              {progressLog.map((ev, i) => (
+                <div key={i} className={ev.tone === "warn" ? "text-amber-300" : "text-zinc-400"}>
+                  {ev.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Document list */}
+        {libraryDocs.length > 0 && (
+          <div className="mt-4 flex-1 overflow-y-auto px-3 space-y-0.5">
+            <div className="px-1 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
+              Documents
+            </div>
+            {libraryDocs.map((doc) => {
+              const isActive = docHash === doc.doc_hash;
+              return (
+                <div
+                  key={doc.doc_hash}
+                  data-testid="doc-library-item"
+                  onClick={() => selectActiveDocument(doc.doc_hash)}
+                  className={`group flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                    isActive ? "bg-white/10 text-white" : "text-zinc-300 hover:bg-white/5"
+                  }`}
+                >
+                  <span className="truncate">{doc.filename}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteLibraryDoc(doc.doc_hash);
+                    }}
+                    aria-label="Delete document"
+                    title="Delete document"
+                    className="shrink-0 text-zinc-500 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
 
-        {/* ── FILE INTAKE & TELEMETRY SECTION ──────────────────────── */}
-        <Card className="border-indigo-500/20 bg-zinc-950/70 relative overflow-hidden">
-          <div className="absolute -top-24 -right-24 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl" />
-          <CardHeader className="border-b border-white/10 pb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-indigo-400 font-semibold">
-                <UploadCloud className="h-4 w-4" />
-                <span>Multi-File Intake Engine (Max 5 Files · PDF, TXT, MD, DOCX)</span>
-              </div>
-              {docHash && (
-                <Badge variant="success">
-                  Active Hash: {shortHash(docHash)}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-6 space-y-6">
-            {/* Dropzone. A real <button> rather than a <div onClick>: as a div
-                it had no role, no tabIndex and no key handler, so keyboard
-                users could not upload at all. */}
+        {/* Tools nav */}
+        <nav className={`px-3 py-3 space-y-0.5 border-t border-white/10 ${libraryDocs.length === 0 ? "mt-4" : ""}`}>
+          <div className="px-1 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
+            Tools
+          </div>
+          {TOOLS.map((t) => (
             <button
+              key={t.view}
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                if (e.dataTransfer.files?.length) {
-                  addFilesToQueue(Array.from(e.dataTransfer.files));
-                }
-              }}
-              className={`group w-full cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all hover:border-indigo-500/50 hover:bg-zinc-900/80 ${
-                isDragging
-                  ? "border-indigo-500 bg-zinc-900/80"
-                  : "border-white/15 bg-zinc-900/40"
+              disabled={!docHash}
+              onClick={() => handleCardClick(t.view)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                activeView === t.view ? "bg-white/10 text-white font-medium" : "text-zinc-300 hover:bg-white/5"
               }`}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept={ACCEPTED_EXTS.join(",")}
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <UploadCloud className="mx-auto h-10 w-10 text-indigo-400 group-hover:scale-110 transition-transform mb-3" />
-              <p className="font-display text-base font-semibold text-white">
-                Drag &amp; drop document files here or click to browse
-              </p>
-              <p className="mt-1 font-mono text-xs text-zinc-400">
-                Supports PDF (with OCR), TXT, Markdown, and Word Documents up to {MAX_FILE_MB}MB
-              </p>
+              {t.icon}
+              <span>{t.label}</span>
             </button>
+          ))}
+        </nav>
 
-            {/* Queue Files List */}
-            {intakeFiles.length > 0 && (
-              <div className="space-y-3">
-                <div className="font-mono text-xs uppercase tracking-wider text-zinc-400 font-semibold flex items-center justify-between">
-                  <span>Queued Documents ({intakeFiles.length}/5)</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setIntakeFiles([]);
-                    }}
-                    className="h-6 px-2 text-[10px] text-zinc-500 hover:text-red-400"
-                  >
-                    Clear Queue
-                  </Button>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {intakeFiles.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-zinc-900/60 px-3.5 py-2.5 font-mono text-xs"
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden pr-2">
-                        <FileText className="h-4 w-4 text-indigo-400 shrink-0" />
-                        <span className="truncate text-zinc-200">{item.name}</span>
-                        <span className="text-[10px] text-zinc-500 shrink-0">({formatSize(item.size)})</span>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${item.name} from queue`}
-                        title={`Remove ${item.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFileFromQueue(item.id);
-                        }}
-                        className="text-zinc-500 hover:text-red-400 transition-colors p-1"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 flex justify-end">
-                  <Button
-                    onClick={triggerUpload}
-                    disabled={indexing || intakeFiles.length === 0}
-                    className="gap-2"
-                  >
-                    {indexing ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span>Indexing Batch…</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4" />
-                        <span>Process &amp; Index Documents</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {intakeError && (
-              <div role="alert" aria-live="polite" className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 font-mono text-xs text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{intakeError}</span>
-              </div>
-            )}
-
-            {/* Indexing Telemetry Log */}
-            {progressLog.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-zinc-950 p-4 space-y-2 font-mono text-xs">
-                <div className="flex items-center justify-between text-zinc-400 border-b border-white/10 pb-2">
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    <Terminal className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Real-time Telemetry Pipeline</span>
-                  </span>
-                  <span className="text-[10px] text-zinc-500">{progressLog.length} events</span>
-                </div>
-                <div
-                  className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-zinc-300"
-                  aria-live="polite"
-                >
-                  {progressLog.map((ev, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <span className="text-zinc-500 shrink-0">[{ev.stamp}]</span>
-                      <span className={ev.tone === "warn" ? "text-amber-300" : "text-indigo-300"}>
-                        {ev.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ── BENTO NAVIGATION CARDS ────────────────────────────────── */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3">
-            <div className="font-mono text-xs uppercase tracking-wider text-zinc-400 font-semibold">
-              Studio Instruments &amp; Enterprise Action Modules
+        {/* Account */}
+        <div className="border-t border-white/10 px-3 py-3">
+          {telemetryStats && (
+            <div className="px-1 pb-2 font-mono text-[10px] text-zinc-600">
+              {telemetryStats.total_requests ?? 0} requests · {telemetryStats.avg_latency_ms ?? 0}ms avg
             </div>
-            {docHash ? (
-              <Badge variant="success">Document Batch Active</Badge>
-            ) : (
-              <Badge variant="secondary">Select or Upload Document</Badge>
-            )}
+          )}
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="truncate text-xs text-zinc-500">
+              {currentUser?.name || currentUser?.email || ""}
+            </span>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              title="Sign out"
+              className="shrink-0 text-zinc-500 hover:text-white transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
+        </div>
+      </aside>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <Homecard
-              numeral="I"
-              heading="Summary Studio"
-              mainText="Executive synthesis, topical takeaways, and structured section breakdowns with Markdown export."
-              ButtonText="Open Studio"
-              disabled={!docHash}
-              onClick={() => handleCardClick("summary")}
-              glyph={<FileText className="h-6 w-6" />}
-            />
-            <Homecard
-              numeral="II"
-              heading="Query Console"
-              mainText="Ask anything. Live SSE streaming answers with passage-level citation chips linked to source document."
-              ButtonText="Open Console"
-              disabled={!docHash}
-              onClick={() => handleCardClick("chat")}
-              glyph={<Sparkles className="h-6 w-6" />}
-            />
-            <Homecard
-              numeral="III"
-              heading="Quiz Arena"
-              mainText="Volume-adaptive multiple-choice examination with evidence explanations and difficulty filters."
-              ButtonText="Launch Arena"
-              disabled={!docHash}
-              onClick={() => handleCardClick("quiz")}
-              glyph={<HelpCircle className="h-6 w-6" />}
-            />
-            <Homecard
-              numeral="IV"
-              heading="Masterclass Studio"
-              mainText="Book module navigator, visual system architecture diagrams, and targeted chapter mastery quizzes."
-              ButtonText="Open Masterclass"
-              disabled={!docHash}
-              onClick={() => handleCardClick("masterclass")}
-              glyph={<BookOpen className="h-6 w-6" />}
-            />
-            <Homecard
-              numeral="V"
-              heading="Compliance &amp; Risk Audit"
-              mainText="Automated security, policy, and data governance risk scanner with severity classification."
-              ButtonText="Run Audit"
-              disabled={!docHash}
-              onClick={() => handleCardClick("audit")}
-              glyph={<ShieldAlert className="h-6 w-6 text-amber-400" />}
-            />
-            <Homecard
-              numeral="VI"
-              heading="Audio &amp; Slide Deck Studio"
-              mainText="Generate 2-host conversational audio briefing scripts or 5-slide executive presentation decks."
-              ButtonText="Open Studio"
-              disabled={!docHash}
-              onClick={() => handleCardClick("slides")}
-              glyph={<Presentation className="h-6 w-6 text-indigo-400" />}
-            />
+      {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto">
+        {!docHash ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-6">
+            <UploadCloud className="h-10 w-10 text-zinc-600" />
+            <p className="text-lg font-semibold text-white">Upload a document to get started</p>
+            <p className="max-w-sm text-sm text-zinc-500">
+              PDF (with OCR), TXT, Markdown, or Word - up to {MAX_FILE_MB}MB. Use the sidebar to add one.
+            </p>
           </div>
-        </section>
-
-        {/* ── ACTIVE INSTRUMENT VIEW ───────────────────────────────── */}
-        {activeView !== "none" && docHash && (
-          <section className="space-y-6 pt-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveView("none")}
-                  className="h-8 text-xs text-zinc-400 hover:text-white"
-                >
-                  ← Close Instrument
-                </Button>
-                <div className="h-4 w-px bg-white/10" />
-                <h2 className="font-display text-xl font-bold text-white uppercase tracking-tight">
-                  {activeView === "summary" && "Summary Studio"}
-                  {activeView === "chat" && "Query Console"}
-                  {activeView === "quiz" && "Quiz Arena"}
-                  {activeView === "graph" && "Knowledge Cartography Atlas"}
-                  {activeView === "masterclass" && "Masterclass Learning Studio"}
-                  {activeView === "audit" && "Compliance & Risk Audit Engine"}
-                  {activeView === "audio" && "Audio Briefing Studio"}
-                  {activeView === "slides" && "Executive Slide Deck Exporter"}
-                </h2>
-              </div>
+        ) : activeView === "none" ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-6">
+            <Sparkles className="h-10 w-10 text-zinc-600" />
+            <p className="text-lg font-semibold text-white">Choose a tool from the sidebar</p>
+            <p className="max-w-sm text-sm text-zinc-500">
+              Ask questions, generate a summary, or explore the knowledge atlas for this document.
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-4xl px-8 py-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-semibold text-white">{VIEW_TITLES[activeView]}</h1>
 
               {activeView === "summary" && summary && (
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={copySummaryToClipboard} className="gap-1.5">
                     {copiedSummary ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-zinc-400" />}
-                    <span>{copiedSummary ? "Copied" : "Copy Markdown"}</span>
+                    <span>{copiedSummary ? "Copied" : "Copy"}</span>
                   </Button>
                   <Button variant="secondary" size="sm" onClick={downloadSummaryMarkdown} className="gap-1.5">
-                    <Download className="h-3.5 w-3.5 text-indigo-400" />
+                    <Download className="h-3.5 w-3.5 text-zinc-400" />
                     <span>Export .MD</span>
                   </Button>
                 </div>
               )}
             </div>
 
-            {/* View 1: Summary */}
+            {/* View: Summary */}
             {activeView === "summary" && (
               <Card className="p-8">
                 {isSummarizing && !summary && (
@@ -907,14 +772,19 @@ export default function Dashboard() {
                 )}
 
                 {summary && (
-                  <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-indigo-300 prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-indigo-500 prose-blockquote:bg-zinc-900/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
-                    <Markdown>{formatSummaryMarkdown(summary)}</Markdown>
-                  </article>
+                  // Bounded + internally scrollable so a long streaming summary
+                  // grows this panel, not the whole page - the panel stays put
+                  // and new tokens scroll inside it instead.
+                  <div className="max-h-[70vh] overflow-y-auto pr-2">
+                    <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-white prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-white/30 prose-blockquote:bg-zinc-900/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
+                      <Markdown>{formatSummaryMarkdown(summary)}</Markdown>
+                    </article>
+                  </div>
                 )}
               </Card>
             )}
 
-            {/* View 2: Query Console */}
+            {/* View: Query Console */}
             {activeView === "chat" && (
               <Card className="p-6">
                 <ChatStream
@@ -927,7 +797,7 @@ export default function Dashboard() {
               </Card>
             )}
 
-            {/* View 3: Quiz Arena */}
+            {/* View: Quiz Arena */}
             {activeView === "quiz" && (
               <div>
                 {isQuizLoading && (
@@ -961,17 +831,17 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* View 4: Knowledge Atlas Graph */}
+            {/* View: Knowledge Atlas Graph */}
             {activeView === "graph" && (
               <GraphView docHash={docHash} highlightNode={focusChunk ? String(focusChunk) : null} />
             )}
 
-            {/* View 5: Masterclass Studio */}
+            {/* View: Masterclass Studio */}
             {activeView === "masterclass" && (
               <MasterclassStudio docHash={docHash} />
             )}
 
-            {/* View 6: Compliance & Risk Audit */}
+            {/* View: Compliance & Risk Audit */}
             {activeView === "audit" && (
               <AuditPanel
                 loading={isAuditLoading}
@@ -982,7 +852,7 @@ export default function Dashboard() {
               />
             )}
 
-            {/* View 7: Audio & Slide Deck Studio */}
+            {/* View: Audio & Slide Deck Studio */}
             {activeView === "slides" && (
               <AudioSlidesPanel
                 audio={{
@@ -1007,18 +877,9 @@ export default function Dashboard() {
                 }}
               />
             )}
-
-          </section>
+          </div>
         )}
       </main>
-
-      {/* ── FOOTER ────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/10 bg-zinc-950 py-6 px-6 font-mono text-xs text-zinc-500 mt-auto">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>DocuMind AI · Enterprise GraphRAG Platform</span>
-          <span>© MMXXVI · All rights reserved</span>
-        </div>
-      </footer>
     </div>
   );
 }

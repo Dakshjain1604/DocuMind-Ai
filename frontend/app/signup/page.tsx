@@ -87,7 +87,7 @@ export default function SignupPage() {
           type="submit"
           disabled={busy}
           size="lg"
-          className="mt-3 w-full justify-between gap-2 bg-indigo-500 text-white hover:bg-indigo-400"
+          className="mt-3 w-full justify-between gap-2 bg-white text-zinc-950 hover:bg-zinc-200"
         >
           <span>{busy ? "Provisioning…" : "Create Workspace"}</span>
           <ArrowRight className="h-4 w-4" />

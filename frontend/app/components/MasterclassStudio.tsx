@@ -163,7 +163,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   const renderMarkdownWithDiagrams = (text: string) => {
     return (
       <div className="space-y-6">
-        <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-indigo-300 prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-indigo-500 prose-blockquote:bg-zinc-950/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
+        <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-white prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-white/30 prose-blockquote:bg-zinc-950/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
           <Markdown
             components={{
               code({ inline, className, children, ...props }: any) {
@@ -195,9 +195,9 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
   return (
     <div className="space-y-6">
       {/* Chapter Selection Bar */}
-      <div className="glass-panel rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-indigo-500/20 bg-zinc-950/80 shadow-xl backdrop-blur-xl">
+      <div className="glass-panel rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-white/10 bg-zinc-950/80 shadow-xl backdrop-blur-xl">
         <div className="flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+          <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-zinc-300">
             <BookOpen className="h-5 w-5" />
           </div>
           <div>
@@ -223,7 +223,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
               if (ch) handleSelectChapter(ch);
             }}
             aria-label="Select chapter"
-            className="bg-zinc-900 border border-white/10 text-white font-mono text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
+            className="bg-zinc-900 border border-white/10 text-white font-mono text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-white/40 cursor-pointer shadow-inner"
           >
             {chapters.map((c) => (
               <option key={c.id} value={c.id}>
@@ -281,7 +281,7 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
 
       {/* Tab 1: Visual Learning Draft */}
       {activeTab === "draft" && (
-        <div className="space-y-4">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/80 p-6 shadow-xl">
           {isDraftLoading && !draftText && (
             <div className="py-20 space-y-4">
               <Skeleton className="h-8 w-2/3" />
@@ -300,7 +300,14 @@ export const MasterclassStudio: React.FC<MasterclassStudioProps> = ({ docHash })
             />
           )}
 
-          {draftText && renderMarkdownWithDiagrams(draftText)}
+          {draftText && (
+            // Bounded + internally scrollable, same reason as the Summary
+            // panel: a long streaming draft should grow inside this panel,
+            // not push the whole page down.
+            <div className="max-h-[65vh] overflow-y-auto pr-2">
+              {renderMarkdownWithDiagrams(draftText)}
+            </div>
+          )}
         </div>
       )}
 

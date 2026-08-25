@@ -1,23 +1,14 @@
 import type { Metadata } from "next";
-import { Libre_Bodoni, Public_Sans, JetBrains_Mono, Geist } from "next/font/google";
+import { JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
+// One clean sans-serif (Geist) for everything, headings included - no
+// separate display serif. The high-contrast Libre Bodoni headline font
+// read as ornate/editorial, not the simple, formal, high-readability look
+// ChatGPT/Claude/Perplexity all share. See globals.css's --serif token,
+// which now points at this same font instead of a second one.
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const display = Libre_Bodoni({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const body = Public_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  display: "swap",
-});
 
 const mono = JetBrains_Mono({
   variable: "--font-mono",
@@ -38,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn(display.variable, body.variable, mono.variable, "font-sans", geist.variable)}>
+    <html lang="en" className={cn(mono.variable, "font-sans", geist.variable)}>
       <body className="antialiased">{children}</body>
     </html>
   );
