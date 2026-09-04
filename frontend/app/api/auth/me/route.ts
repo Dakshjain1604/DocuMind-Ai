@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
 
-import { AUTH_COOKIE, getJwtSecret } from "@/lib/auth";
+import {
+  AUTH_COOKIE,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+  getJwtSecretKey,
+} from "@/lib/auth";
 
 /**
  * Who's signed in, from the same cookie middleware.ts already verifies.
@@ -17,8 +22,15 @@ export async function GET() {
     return NextResponse.json({ message: "Not authenticated." }, { status: 401 });
   }
   try {
-    const payload = jwt.verify(token, getJwtSecret()) as { id?: string; email?: string; name?: string };
-    return NextResponse.json({ id: payload.id, email: payload.email, name: payload.name });
+    const { payload } = await jwtVerify(token, getJwtSecretKey(), {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+    return NextResponse.json({
+      id: payload.id,
+      email: payload.email,
+      name: payload.name,
+    });
   } catch {
     return NextResponse.json({ message: "Invalid or expired session." }, { status: 401 });
   }

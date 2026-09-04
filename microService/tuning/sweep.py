@@ -25,6 +25,7 @@ from langchain_chroma import Chroma
 
 from app.core.chunker import chunk_documents
 from app.core.embeddings import get_embeddings
+from app.indexing.bm25 import BM25Index
 from app.indexing.store import (
     doc_hash_from_bytes,
     doc_dir,
@@ -32,7 +33,7 @@ from app.indexing.store import (
     persist_artifacts,
     load_artifacts,
 )
-from app.retrieval.search import BM25Index, GraphIndex, reciprocal_rank_fusion, vector_search
+from app.retrieval.search import GraphIndex, reciprocal_rank_fusion, vector_search
 from app.retrieval.reranker import rerank
 from app.indexing.community import build_networkx_graph, detect_communities
 from app.indexing.graph_extractor import extract_graph

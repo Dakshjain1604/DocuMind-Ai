@@ -7,7 +7,7 @@ See the [root README](../README.md) for the architecture and setup.
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env
 .venv/bin/python -m uvicorn app.main:app --reload --port 8000
-./run_tests.sh                # 182 tests; add -q for a quiet run
+./run_tests.sh                # 186 tests; add -q for a quiet run
 ```
 
 Interactive API docs at `http://localhost:8000/docs`.
@@ -34,8 +34,25 @@ else is a 400, since these values reach the filesystem.
 | POST | `/chapters` | `{doc_hash}` | envelope: `chapters`, `coverage` |
 | POST | `/learning-draft` | `{doc_hash, chapter_id, chapter_title}` | **SSE** |
 | POST | `/chapter-quiz` | `{doc_hash, chapter_id, chapter_title}` | envelope: `cards` |
+| POST | `/suggested-questions` | `{doc_hash}` | envelope: `questions` |
 | GET | `/telemetry/stats` | — | aggregate request statistics |
 | GET | `/trace/{request_id}` | — | one request's stages, context and answer |
+
+### Auth
+
+Every document-scoped route (`/documents*`, `/graph/{doc_hash}`, `/index`,
+`/query*`, the studio and masterclass generators, `/trace/{request_id}`)
+requires `Authorization: Bearer <JWT>` and returns `401` without one. The JWT
+must be signed with the shared `JWT_SECRET` (HS256) with `iss=documind-frontend`
+and `aud=documind-backend` — anything else is rejected even if the signature
+is valid. `/health`, `/`, and `/telemetry/stats` stay public for infra
+probing. Ownership: a document's `owners` list is checked on read/delete,
+`403` if absent. `/trace/{request_id}` is additionally ownership-checked so one
+user cannot read another's answer provenance.
+
+The frontend's Next middleware backstops the `/documents`, `/graph` and
+`/trace` proxy routes with a `401` JSON response when the session cookie is
+missing, so those paths never reach this service without a token.
 
 ### Response envelope
 

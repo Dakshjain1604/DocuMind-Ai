@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
+import mongoose, { Schema, type Document, models } from "mongoose";
 import { connectToMongoDB } from "./mongodb";
-import User from "@/models/userModel";
 
 export interface UserAccount {
   id: string;
@@ -11,6 +11,25 @@ export interface UserAccount {
   password: string;
   createdAt: string;
 }
+
+// Document shape for the Mongo branch, folded in from the old models/userModel.ts
+// — userStore was its only consumer, so the split bought indirection for nothing.
+interface UserDoc extends Document {
+  name: string;
+  email: string;
+  password: string;
+  createdAt: Date;
+}
+
+const UserSchema = new Schema<UserDoc>({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+// Reuse an existing model across hot reloads (Next.js dev re-imports modules).
+const User = (models.User || mongoose.model<UserDoc>("User", UserSchema)) as typeof mongoose.Model<UserDoc>;
 
 const LOCAL_USERS_FILE = path.join(process.cwd(), "..", "tmp", "users_db.json");
 

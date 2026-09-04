@@ -6,13 +6,28 @@ from app.config.settings import get_settings
 
 security = HTTPBearer()
 
+# Must match frontend/lib/auth.ts. The frontend signs every token with these,
+# so a token minted by any other flow (or replayed from another app that
+# somehow shares the secret) is rejected rather than treated as valid.
+JWT_ISSUER = "documind-frontend"
+JWT_AUDIENCE = "documind-backend"
+
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Validates the JWT token provided in the Authorization header."""
     settings = get_settings()
     token = credentials.credentials
     try:
-        # The Next.js frontend uses `jose` to sign the JWT, usually with HS256 algorithm.
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        # The Next.js frontend uses `jose` to sign the JWT with HS256.
+        # `issuer`/`audience` pin it to this app pair (see the constants above);
+        # PyJWT raises if either claim is missing or mismatched.
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=["HS256"],
+            issuer=JWT_ISSUER,
+            audience=JWT_AUDIENCE,
+        )
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

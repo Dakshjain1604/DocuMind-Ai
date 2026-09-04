@@ -1,14 +1,12 @@
 """Unified LLM client supporting OpenRouter and Groq with role-based fallback chains.
 
-Roles read an ordered list of model IDs from env (comma-separated).
-On 429/5xx/timeout the client walks the list. Embeddings live elsewhere
-(see core/embeddings.py).
+Roles read an ordered list of model IDs from Settings (env + defaults, see
+app/config/settings.py). On 429/5xx/timeout the client walks the list.
+Embeddings live elsewhere (see core/embeddings.py).
 """
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
@@ -25,54 +23,22 @@ class LLMRoleNotConfigured(Exception):
 
 VALID_ROLES = {"extract", "answer", "rewrite", "rerank"}
 
-GROQ_DEFAULT_MODELS = {
-    "extract": "llama-3.1-8b-instant,llama-3.3-70b-versatile",
-    "answer": "llama-3.3-70b-versatile,deepseek-r1-distill-llama-70b",
-    "rewrite": "llama-3.1-8b-instant",
-    "rerank": "llama-3.1-8b-instant",
-}
-
-NVIDIA_DEFAULT_MODELS = {
-    "extract": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
-    "answer": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
-    "rewrite": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
-    "rerank": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
-}
-
-OPENROUTER_DEFAULT_MODELS = {
-    "extract": "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,openai/gpt-4o-mini",
-    "answer": "meta-llama/llama-3.3-70b-instruct:free,deepseek/deepseek-chat-v3-0324:free,openai/gpt-4o-mini",
-    "rewrite": "meta-llama/llama-3.1-8b-instruct:free",
-    "rerank": "qwen/qwen-2.5-7b-instruct:free",
-}
-
 
 def get_models_for_role(role: str) -> list[str]:
     settings = get_settings()
     provider = settings.llm_provider
-
-    if provider == "groq":
-        env_key = f"GROQ_MODEL_{role.upper()}"
-        raw = os.environ.get(env_key) or GROQ_DEFAULT_MODELS.get(role)
-        if not raw:
-            raise LLMRoleNotConfigured(f"Role '{role}' is not configured for provider 'groq' (set {env_key})")
-        return [m.strip() for m in raw.split(",") if m.strip()]
-    elif provider == "nvidia":
-        env_key = f"NVIDIA_MODEL_{role.upper()}"
-        raw = os.environ.get(env_key) or NVIDIA_DEFAULT_MODELS.get(role)
-        if not raw:
-            raise LLMRoleNotConfigured(f"Role '{role}' is not configured for provider 'nvidia' (set {env_key})")
-        return [m.strip() for m in raw.split(",") if m.strip()]
-    else:
-        # Default to openrouter
-        env_key = f"OPENROUTER_MODEL_{role.upper()}"
-        raw = os.environ.get(env_key)
-        if not raw:
-            if role in OPENROUTER_DEFAULT_MODELS:
-                raw = OPENROUTER_DEFAULT_MODELS[role]
-            else:
-                raise LLMRoleNotConfigured(f"env var {env_key} is unset")
-        return [m.strip() for m in raw.split(",") if m.strip()]
+    chains_by_provider = {
+        "groq": settings.groq_models,
+        "nvidia": settings.nvidia_models,
+        "openrouter": settings.openrouter_models,
+    }
+    env_key = f"{provider.upper()}_MODEL_{role.upper()}"
+    models = chains_by_provider.get(provider, {}).get(role)
+    if not models:
+        raise LLMRoleNotConfigured(
+            f"Role '{role}' is not configured for provider '{provider}' (set {env_key})"
+        )
+    return models
 
 
 @dataclass
@@ -114,7 +80,7 @@ class LLMClient:
         self.provider = settings.llm_provider
 
         if self.provider == "groq":
-            api_key = (settings.groq_api_key or os.environ.get("GROQ_API_KEY", "")).strip()
+            api_key = (settings.groq_api_key or "").strip()
             if not api_key:
                 raise RuntimeError(
                     "GROQ_API_KEY is not set or empty — set it in microService/.env "
@@ -122,7 +88,7 @@ class LLMClient:
                 )
             base_url = settings.groq_base_url
         elif self.provider == "nvidia":
-            api_key = (settings.nvidia_api_key or os.environ.get("NVIDIA_API_KEY", "")).strip()
+            api_key = (settings.nvidia_api_key or "").strip()
             if not api_key:
                 raise RuntimeError(
                     "NVIDIA_API_KEY is not set or empty — set it in microService/.env "
@@ -130,7 +96,7 @@ class LLMClient:
                 )
             base_url = settings.nvidia_base_url
         else:
-            api_key = (settings.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY", "")).strip()
+            api_key = (settings.openrouter_api_key or "").strip()
             if not api_key:
                 raise RuntimeError(
                     "OPENROUTER_API_KEY is not set or empty — set it in microService/.env "

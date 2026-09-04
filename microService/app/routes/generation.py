@@ -155,6 +155,17 @@ class QuizQuestion(BaseModel):
     explanation: str = ""
 
 
+# Quiz depth scales with how much derived text there is to test against: a
+# 2-page memo and a booklength manual warrant different quiz sizes. Tuning
+# knobs are named here rather than inlined so the tiers read as policy.
+_QUIZ_SMALL_TEXT_LIMIT = 3000
+_QUIZ_MEDIUM_TEXT_LIMIT = 15000
+# (n_questions, max_chunks sampled from the document) per text-length tier.
+_QUIZ_SMALL = (5, 5)
+_QUIZ_MEDIUM = (10, 10)
+_QUIZ_LARGE = (18, 16)
+
+
 async def generate_quiz_cards(doc_hash: str, *, request_id: str | None = None) -> dict[str, Any]:
     if not artifacts_exist(doc_hash):
         return fail(NOT_INDEXED, "doc_hash not indexed", total_questions=0, cards=[])
@@ -165,12 +176,12 @@ async def generate_quiz_cards(doc_hash: str, *, request_id: str | None = None) -
     probe = _get_document_sample(loaded, max_chunks=8)
     content_len = len(probe.text)
 
-    if content_len < 3000:
-        n_questions, max_chunks = 5, 5
-    elif content_len < 15000:
-        n_questions, max_chunks = 10, 10
+    if content_len < _QUIZ_SMALL_TEXT_LIMIT:
+        n_questions, max_chunks = _QUIZ_SMALL
+    elif content_len < _QUIZ_MEDIUM_TEXT_LIMIT:
+        n_questions, max_chunks = _QUIZ_MEDIUM
     else:
-        n_questions, max_chunks = 18, 16
+        n_questions, max_chunks = _QUIZ_LARGE
 
     sample = _get_document_sample(loaded, max_chunks=max_chunks)
 

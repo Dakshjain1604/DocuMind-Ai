@@ -10,6 +10,10 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    // `next lint` used to add these automatically; the flat config does not.
+    ignores: [".next/**", "node_modules/**", "playwright-report/**", "test-results/**", "coverage/**"],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {

@@ -67,8 +67,13 @@ async def post_index(
     """Accept a batch of documents and stream the indexing pipeline's progress."""
     settings = get_settings()
 
+    # The `file` single-upload field may arrive alongside `files` (or re-send
+    # the same upload under both names). Dedupe by filename rather than by
+    # object identity — two UploadFile wrappers for the same actual file are
+    # never `==`, so an identity check would silently double-index.
     upload_list: list[UploadFile] = [f for f in files if f.filename] if files else []
-    if file and file.filename and file not in upload_list:
+    filenames = {f.filename for f in upload_list}
+    if file and file.filename and file.filename not in filenames:
         upload_list.append(file)
     if not upload_list:
         raise HTTPException(status_code=422, detail="No files uploaded")

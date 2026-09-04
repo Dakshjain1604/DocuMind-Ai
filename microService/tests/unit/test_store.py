@@ -124,7 +124,7 @@ def test_artifacts_exist_is_false_without_bm25_corpus(tmp_path, monkeypatch):
 
     assert artifacts_exist(h) is False
 
-    from app.retrieval.search import BM25Index
+    from app.indexing.bm25 import BM25Index
 
     BM25Index.build(["now complete"]).save(d / "bm25_corpus.pkl")
     assert artifacts_exist(h) is True

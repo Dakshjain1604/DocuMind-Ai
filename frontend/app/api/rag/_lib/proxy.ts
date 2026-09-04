@@ -46,10 +46,13 @@ function describe(err: unknown): string {
 }
 
 import { cookies } from "next/headers";
+import { AUTH_COOKIE } from "@/lib/auth";
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  // Same cookie name middleware.ts and the auth routes use — hardcoding
+  // "token" here would drift silently if AUTH_COOKIE ever changes.
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

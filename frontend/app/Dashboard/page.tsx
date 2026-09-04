@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import axios from "axios";
 import Markdown from "react-markdown";
 import Link from "next/link";
 import {
@@ -42,7 +41,8 @@ import {
   TelemetryStats,
 } from "./types";
 import { CoverageNote, EmptyState, ErrorBanner } from "@/components/ui/ErrorBanner";
-import { readSseStream } from "@/lib/sse";
+import { sseFetch } from "@/lib/sse";
+import { useCopyFeedback } from "@/lib/useCopyFeedback";
 import { formatSummaryMarkdown } from "@/lib/formatSummary";
 import { AuditPanel } from "./components/AuditPanel";
 import { AudioSlidesPanel } from "./components/AudioSlidesPanel";
@@ -159,7 +159,8 @@ export default function Dashboard() {
   // State for Summary
   const [summary, setSummary] = useState<string>("");
   const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
-  const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
+  const { copiedId: copiedSummary, markCopied: markSummaryCopied } = useCopyFeedback();
+  const summaryAbortRef = useRef<AbortController | null>(null);
 
   // State for Quiz
   const [quizCards, setQuizCards] = useState<QuizCardType[]>([]);
@@ -172,7 +173,7 @@ export default function Dashboard() {
   // State for Audio Briefing
   const [audioScript, setAudioScript] = useState<string>("");
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
-  const [copiedAudio, setCopiedAudio] = useState<boolean>(false);
+  const { copiedId: copiedAudio, markCopied: markAudioCopied } = useCopyFeedback();
 
   // State for Slide Deck
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -196,24 +197,27 @@ export default function Dashboard() {
   // Load Library Documents & Telemetry on mount
   const loadLibrary = useCallback(async () => {
     try {
-      const res = await axios.get("/api/rag/documents");
-      if (res.data.success && res.data.data?.documents) {
-        const docs = res.data.data.documents;
+      const res = await fetch("/api/rag/documents", { cache: "no-store" });
+      const body = await res.json();
+      if (body.success && body.data?.documents) {
+        const docs = body.data.documents;
         setLibraryDocs(docs);
-        if (docs.length > 0 && !docHash) {
-          setDocHash(docs[0].doc_hash);
-        }
+        // Functional setter so the callback has no `docHash` dependency (a
+        // reload triggered by a delete would otherwise close over a stale
+        // selection and re-select a purged document).
+        setDocHash((cur) => cur ?? docs[0]?.doc_hash ?? null);
       }
     } catch (err) {
       console.error("Failed to load document library:", err);
     }
-  }, [docHash]);
+  }, []);
 
   const loadTelemetry = useCallback(async () => {
     try {
-      const res = await axios.get("/api/rag/telemetry");
-      if (res.data.success) {
-        setTelemetryStats(res.data.data);
+      const res = await fetch("/api/rag/telemetry", { cache: "no-store" });
+      const body = await res.json();
+      if (body.success) {
+        setTelemetryStats(body.data);
       }
     } catch (err) {
       console.error("Failed to load telemetry:", err);
@@ -221,11 +225,16 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    // Abort any in-flight summary stream when the panel unmounts.
+    return () => summaryAbortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
     loadLibrary();
     loadTelemetry();
-    axios
-      .get("/api/auth/me")
-      .then((res) => setCurrentUser({ name: res.data.name, email: res.data.email }))
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setCurrentUser(data ? { name: data.name, email: data.email } : null))
       .catch(() => setCurrentUser(null));
   }, [loadLibrary, loadTelemetry]);
 
@@ -242,7 +251,8 @@ export default function Dashboard() {
 
   const deleteLibraryDoc = async (hash: string) => {
     try {
-      await axios.delete(`/api/rag/documents/${hash}`);
+      const res = await fetch(`/api/rag/documents/${hash}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       setLibraryDocs((prev) => prev.filter((d) => d.doc_hash !== hash));
       if (docHash === hash) {
         setDocHash(null);
@@ -321,16 +331,14 @@ export default function Dashboard() {
     });
 
     try {
-      const res = await fetch("/api/rag/index", {
-        method: "POST",
-        body: formData,
-      });
-
-      await readSseStream(res, {
-        onError: (message) => {
-          throw new Error(message);
-        },
-        onEvent: (evt, data: IndexEventData) => {
+      await sseFetch(
+        "/api/rag/index",
+        { method: "POST", body: formData },
+        {
+          onError: (message) => {
+            throw new Error(message);
+          },
+          onEvent: (evt, data: IndexEventData) => {
           if (evt === "done") {
             const hash = data.doc_hash as string;
             setDocHash(hash);
@@ -365,7 +373,8 @@ export default function Dashboard() {
             }
           }
         },
-      });
+        }
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Pipeline processing failed.";
@@ -377,35 +386,45 @@ export default function Dashboard() {
   };
 
   const fetchSummary = async (hash: string) => {
+    // A new document selection (or unmount) supersedes the prior stream;
+    // abort it so a stale summary can't overwrite the new document's panel.
+    summaryAbortRef.current?.abort();
+    const controller = new AbortController();
+    summaryAbortRef.current = controller;
+
     setIsSummarizing(true);
     setSummary("");
     setStudioErrors((prev) => ({ ...prev, summary: undefined }));
     try {
-      const res = await fetch("/api/rag/summary", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ doc_hash: hash }),
-      });
-
       let acc = "";
-      await readSseStream(res, {
-        onError: (message) =>
-          setStudioErrors((prev) => ({ ...prev, summary: message })),
-        onEvent: (evt, data: { text?: string; coverage?: Coverage; message?: string }) => {
-          if (evt === "token") {
-            acc += data.text ?? "";
-            setSummary(acc);
-          } else if (evt === "done") {
-            setStudioCoverage((prev) => ({ ...prev, summary: data.coverage }));
-          } else if (evt === "error") {
-            setStudioErrors((prev) => ({
-              ...prev,
-              summary: data.message ?? "Summary generation failed.",
-            }));
-          }
+      await sseFetch(
+        "/api/rag/summary",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ doc_hash: hash }),
+          signal: controller.signal,
         },
-      });
+        {
+          onError: (message) =>
+            setStudioErrors((prev) => ({ ...prev, summary: message })),
+          onEvent: (evt, data: { text?: string; coverage?: Coverage; message?: string }) => {
+            if (evt === "token") {
+              acc += data.text ?? "";
+              setSummary(acc);
+            } else if (evt === "done") {
+              setStudioCoverage((prev) => ({ ...prev, summary: data.coverage }));
+            } else if (evt === "error") {
+              setStudioErrors((prev) => ({
+                ...prev,
+                summary: data.message ?? "Summary generation failed.",
+              }));
+            }
+          },
+        }
+      );
     } finally {
+      if (summaryAbortRef.current === controller) summaryAbortRef.current = null;
       setIsSummarizing(false);
     }
   };
@@ -430,8 +449,12 @@ export default function Dashboard() {
     setStudioErrors((prev) => ({ ...prev, [key]: undefined }));
     setStudioCoverage((prev) => ({ ...prev, [key]: undefined }));
     try {
-      const res = await axios.post(url, { doc_hash: hash });
-      const body = res.data;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ doc_hash: hash }),
+      });
+      const body = await res.json();
       if (!body?.success) {
         setStudioErrors((prev) => ({
           ...prev,
@@ -442,11 +465,10 @@ export default function Dashboard() {
       apply(pick(body.data ?? {}));
       setStudioCoverage((prev) => ({ ...prev, [key]: body.data?.coverage }));
     } catch (err) {
+      console.error("Studio fetch failed:", err);
       setStudioErrors((prev) => ({
         ...prev,
-        [key]: axios.isAxiosError(err)
-          ? `Request failed (${err.response?.status ?? "no response"}). Is the backend running?`
-          : "Unexpected error while contacting the service.",
+        [key]: "Request failed. Is the backend running?",
       }));
     } finally {
       setLoading(false);
@@ -490,8 +512,7 @@ export default function Dashboard() {
   const copySummaryToClipboard = () => {
     if (!summary) return;
     navigator.clipboard.writeText(summary);
-    setCopiedSummary(true);
-    setTimeout(() => setCopiedSummary(false), 2000);
+    markSummaryCopied();
   };
 
   const downloadSummaryMarkdown = () => {
@@ -860,12 +881,11 @@ export default function Dashboard() {
                   loading: isAudioLoading,
                   error: studioErrors.audio,
                   coverage: studioCoverage.audio,
-                  copied: copiedAudio,
+                  copied: Boolean(copiedAudio),
                   onGenerate: () => docHash && fetchAudioBriefing(docHash),
                   onCopy: () => {
                     navigator.clipboard?.writeText(audioScript);
-                    setCopiedAudio(true);
-                    setTimeout(() => setCopiedAudio(false), 2000);
+                    markAudioCopied();
                   },
                 }}
                 slides={{

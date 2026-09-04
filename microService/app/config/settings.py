@@ -62,6 +62,25 @@ def _bool(env_key: str, default: bool) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _tuple(env_key: str, default: str) -> tuple[str, ...]:
+    raw = os.environ.get(env_key, default)
+    return tuple(e.strip() for e in raw.split(",") if e.strip())
+
+
+def _model_chain(env_prefix: str, defaults: dict[str, str]) -> dict[str, list[str]]:
+    """Build a provider's per-role model fallback chain from
+    {PREFIX}_MODEL_{ROLE} env vars, falling back to `defaults` per role.
+    Roles not configured here (and not in defaults) are simply absent, which
+    the LLM layer reports as LLMRoleNotConfigured at call time."""
+    chains: dict[str, list[str]] = {}
+    for role, default in defaults.items():
+        raw = os.environ.get(f"{env_prefix}_MODEL_{role.upper()}") or default
+        parsed = [m.strip() for m in raw.split(",") if m.strip()]
+        if parsed:
+            chains[role] = parsed
+    return chains
+
+
 def _opt_str(env_key: str) -> str | None:
     return os.environ.get(env_key) or None
 
@@ -85,6 +104,31 @@ def _require_secret(env_key: str, min_len: int = 16) -> str:
             f"JWT_SECRET exactly, since the frontend signs the tokens this service verifies."
         )
     return v
+
+
+# Per-provider fallback chains (role -> comma-separated model IDs). These used
+# to live in app/core/llm.py with the env reads inline; they're the defaults
+# here so all provider config (keys, base URLs, models) shares one surface.
+GROQ_DEFAULT_MODELS = {
+    "extract": "llama-3.1-8b-instant,llama-3.3-70b-versatile",
+    "answer": "llama-3.3-70b-versatile,deepseek-r1-distill-llama-70b",
+    "rewrite": "llama-3.1-8b-instant",
+    "rerank": "llama-3.1-8b-instant",
+}
+
+NVIDIA_DEFAULT_MODELS = {
+    "extract": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "answer": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "rewrite": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+    "rerank": "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,z-ai/glm-5.2",
+}
+
+OPENROUTER_DEFAULT_MODELS = {
+    "extract": "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,openai/gpt-4o-mini",
+    "answer": "meta-llama/llama-3.3-70b-instruct:free,deepseek/deepseek-chat-v3-0324:free,openai/gpt-4o-mini",
+    "rewrite": "meta-llama/llama-3.1-8b-instruct:free",
+    "rerank": "qwen/qwen-2.5-7b-instruct:free",
+}
 
 
 def _resolve_rerank_mode(json_data: dict) -> str:
@@ -111,6 +155,11 @@ class Settings:
     groq_base_url: str
     nvidia_api_key: str | None
     nvidia_base_url: str
+    # Role -> ordered model fallback chain, per provider. Built from
+    # {PROVIDER}_MODEL_{ROLE} env vars with the module-level defaults above.
+    openrouter_models: dict[str, list[str]]
+    groq_models: dict[str, list[str]]
+    nvidia_models: dict[str, list[str]]
 
     # Chunking. RAG_CHUNK_SIZE/OVERLAP are the "parent" size for hierarchical
     # (small-to-big) chunking; RAG_CHILD_CHUNK_* is the small retrieval unit.
@@ -135,6 +184,10 @@ class Settings:
     rrf_weight_graph: float
     graph_hops: int
     max_community_context: int
+    # Upper bound (seconds) for each retrieval leg (vector/BM25/graph). A hung
+    # model or chroma call that exceeds this is treated as "no results" rather
+    # than letting a worker thread be held forever.
+    retrieval_timeout_s: float
 
     # Rerank
     rerank_mode: str  # cross_encoder | llm | off
@@ -170,7 +223,8 @@ class Settings:
 
     # Observability
     trace_db_path: str
-    
+    log_level: str
+
     # Auth
     jwt_secret: str
 
@@ -178,6 +232,13 @@ class Settings:
     rate_limit_query_per_min: int
     rate_limit_index_per_min: int
     rate_limit_studio_per_min: int
+    # Treat X-Forwarded-For as authoritative for rate limiting (behind a
+    # reverse proxy only — see app/core/rate_limit.py). False by default so a
+    # directly-exposed service can't be bypassed by sending that header.
+    trust_proxy: bool
+
+    # Deployment
+    cors_origins: tuple[str, ...]
 
 def get_settings() -> Settings:
     rj = _load_retrieval_json()
@@ -190,6 +251,9 @@ def get_settings() -> Settings:
         groq_base_url=_str("GROQ_BASE_URL", None, rj, "https://api.groq.com/openai/v1"),
         nvidia_api_key=_opt_str("NVIDIA_API_KEY"),
         nvidia_base_url=_str("NVIDIA_BASE_URL", None, rj, "https://integrate.api.nvidia.com/v1"),
+        openrouter_models=_model_chain("OPENROUTER", OPENROUTER_DEFAULT_MODELS),
+        groq_models=_model_chain("GROQ", GROQ_DEFAULT_MODELS),
+        nvidia_models=_model_chain("NVIDIA", NVIDIA_DEFAULT_MODELS),
         chunk_size=_int("RAG_CHUNK_SIZE", "chunk_size", rj, 1500),
         chunk_overlap=_int("RAG_CHUNK_OVERLAP", "chunk_overlap", rj, 200),
         child_chunk_size=_int("RAG_CHILD_CHUNK_SIZE", "child_chunk_size", rj, 400),
@@ -212,6 +276,7 @@ def get_settings() -> Settings:
         rrf_weight_graph=_float("RAG_RRF_WEIGHT_GRAPH", "graph_weight", rj, 0.5),
         graph_hops=_int("RAG_GRAPH_HOPS", None, rj, 2),
         max_community_context=_int("RAG_MAX_COMMUNITY_CONTEXT", None, rj, 2),
+        retrieval_timeout_s=_float("RAG_RETRIEVAL_TIMEOUT_S", None, rj, 30.0),
         rerank_mode=_resolve_rerank_mode(rj),
         rerank_model=_str("RAG_RERANK_MODEL", None, rj, "cross-encoder/ms-marco-MiniLM-L-6-v2"),
         answer_max_tokens=_int("RAG_ANSWER_MAX_TOKENS", None, rj, 2048),
@@ -240,8 +305,11 @@ def get_settings() -> Settings:
         ocr_languages=_str("RAG_OCR_LANGUAGES", None, rj, "eng"),
         sse_heartbeat_s=_float("RAG_SSE_HEARTBEAT_S", None, rj, 2.0),
         trace_db_path=_str("RAG_TRACE_DB_PATH", None, rj, f"{persist_dir}/traces.db"),
+        log_level=_str("RAG_LOG_LEVEL", None, rj, "INFO").upper(),
         jwt_secret=_require_secret("JWT_SECRET"),
         rate_limit_query_per_min=_int("RAG_RATE_LIMIT_QUERY_PER_MIN", None, rj, 20),
         rate_limit_index_per_min=_int("RAG_RATE_LIMIT_INDEX_PER_MIN", None, rj, 5),
         rate_limit_studio_per_min=_int("RAG_RATE_LIMIT_STUDIO_PER_MIN", None, rj, 10),
+        trust_proxy=_bool("RAG_TRUST_PROXY", False),
+        cors_origins=_tuple("RAG_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"),
     )

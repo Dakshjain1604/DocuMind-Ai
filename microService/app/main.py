@@ -7,7 +7,6 @@ app/services/.
 from __future__ import annotations
 
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 from app.core.logging_config import configure_logging  # noqa: E402
 from app.core.observability import init_trace_db, log_event  # noqa: E402
 from app.core.rate_limit import limiter  # noqa: E402
+from app.config.settings import get_settings  # noqa: E402
 from app.indexing.store import InvalidDocHash  # noqa: E402
 from app.routes import documents, masterclass, query, studio, telemetry  # noqa: E402
 
@@ -51,11 +51,11 @@ app = FastAPI(
 
 # Browser origins allowed to call this service. Defaults to the local Next.js
 # dev server rather than "*", which previously let any page on the internet
-# drive the whole API from a visitor's browser.
-_origins = os.environ.get("RAG_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+# drive the whole API from a visitor's browser. Value comes from Settings
+# (RAG_CORS_ORIGINS) so there's a single config surface.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in _origins.split(",") if o.strip()],
+    allow_origins=list(get_settings().cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

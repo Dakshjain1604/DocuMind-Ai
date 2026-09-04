@@ -33,11 +33,14 @@ app/
   api/auth/           signup / signin / signout
 components/ui/        button, card, badge, input, skeleton, ErrorBanner
 lib/
-  sse.ts              SSE frame parsing + stream reader
+  sse.ts              SSE frame parsing + sseFetch (fetch + stream reader)
   formatSummary.ts    summary markdown normalisation
-  auth.ts             JWT secret resolution (throws if unset)
+  useCopyFeedback.ts  the copy-button "check then revert" state, once
+  auth.ts             JWT secret resolution (throws if unset); iss/aud constants
   userStore.ts        accounts: Mongo when configured, JSON file otherwise
-middleware.ts         verifies the session cookie; gates /Dashboard
+  mongodb.ts          singleton Mongo connection
+middleware.ts         verifies the session cookie; gates /Dashboard and the
+                      /api/rag/documents|graph|trace proxy routes (401 for APIs)
 ```
 
 `@/*` resolves from the `frontend/` root (see `tsconfig.json`), so
@@ -50,7 +53,9 @@ middleware.ts         verifies the session cookie; gates /Dashboard
   `app/api/rag/*`, which all route through `_lib/proxy.ts` — that is where the
   base URL, timeouts, error envelope and SSE headers live.
 - **Read SSE with `lib/sse.ts`.** Frame-boundary handling is subtle enough that
-  it should exist once.
+  it should exist once. Streaming panels call `sseFetch(...)`, which attaches
+  the caller's `AbortSignal` to the underlying request so a cancelled stream
+  actually closes the upstream connection.
 - **Distinguish empty from failed.** `ErrorBanner` and `EmptyState` are separate
   components on purpose: "no findings in this document" and "the analysis could
   not run" must not look alike. Render `CoverageNote` alongside any generated
@@ -65,7 +70,8 @@ With both services running and a document indexed:
 2. Navigate straight to `/Dashboard` — redirects to `/signin`
 3. Sign up, sign in
 4. Upload by drag-drop **and** by tabbing to the dropzone and pressing Enter
-5. Queue a 6th file — rejected cleanly; queue count and Process button agree
+5. Queue a 6th file — rejected cleanly; queue count and "Index N file(s)"
+   button agree
 6. Index — the progress log fills with real stage names and chunk counts, and
    shows an amber warning if graph sampling kicks in
 7. Library shows the filename, not the hash

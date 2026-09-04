@@ -1,10 +1,12 @@
 """Health, telemetry and trace lookup."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.config.settings import get_settings
+from app.core.auth import get_current_user
 from app.core.observability import get_telemetry_stats, get_trace
+from app.routes.deps import require_owned
 
 router = APIRouter(tags=["telemetry"])
 
@@ -55,8 +57,17 @@ def get_telemetry():
 
 
 @router.get("/trace/{request_id}")
-def get_trace_endpoint(request_id: str):
+async def get_trace_endpoint(request_id: str, user: dict = Depends(get_current_user)):
+    """Full trace for one request. Auth-gated (like every /query trace it can
+    expose an owned document's answer text) and additionally scoped to
+    documents this user owns — a shared-feature flag must not leak another
+    user's indexed content.
+
+    /telemetry/stats stays public on purpose (the landing page renders it);
+    it only exposes aggregates, never per-request text.
+    """
     trace = get_trace(request_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="trace not found")
+    require_owned(trace["doc_hash"], user)
     return trace

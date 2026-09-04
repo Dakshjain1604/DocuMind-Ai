@@ -9,8 +9,9 @@ stdout with print(). Neither could be levelled, filtered or redirected.
 from __future__ import annotations
 
 import logging
-import os
 import sys
+
+from app.config.settings import get_settings
 
 _CONFIGURED = False
 
@@ -22,7 +23,10 @@ def configure_logging(level: str | None = None) -> None:
     if _CONFIGURED:
         return
 
-    resolved = (level or os.environ.get("RAG_LOG_LEVEL") or "INFO").upper()
+    # Explicit arg > RAG_LOG_LEVEL env > Settings default. `or` keeps this
+    # short-circuiting, so get_settings() isn't even reached when an explicit
+    # level is provided.
+    resolved = (level or get_settings().log_level or "INFO").upper()
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
         logging.Formatter(

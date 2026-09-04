@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { SignJWT } from "jose";
 import { findUserByEmail } from "@/lib/userStore";
-import { AUTH_COOKIE, getJwtSecret } from "@/lib/auth";
+import {
+  AUTH_COOKIE,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+  getJwtSecretKey,
+} from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,11 +36,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name },
-      getJwtSecret(),
-      { expiresIn: "7d" }
-    );
+    // Issuer/audience are pinned so the backend can reject tokens minted by
+    // anything other than this signin flow (see microService/app/core/auth.py).
+    const token = await new SignJWT({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .sign(getJwtSecretKey());
 
     const res = NextResponse.json({
       message: "Signin successful.",

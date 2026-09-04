@@ -60,11 +60,15 @@ async def test_chapters_success():
 
 
 @pytest.mark.asyncio
-async def test_learning_draft_404_when_not_indexed():
+async def test_learning_draft_not_indexed_returns_fail_envelope_not_404():
+    # Same NOT_INDEXED convention as /chapters — a bare HTTPException 404 would
+    # bypass the client-friendly envelope the frontend surfaces.
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.post("/learning-draft", json={"doc_hash": "0" * 64})
-    assert r.status_code == 404
+    assert r.status_code == 200
+    assert r.json()["success"] is False
+    assert r.json()["error"]["code"] == "not_indexed"
 
 
 @pytest.mark.asyncio

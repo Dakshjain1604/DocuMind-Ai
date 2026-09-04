@@ -22,3 +22,10 @@ export function getJwtSecretKey(): Uint8Array {
 }
 
 export const AUTH_COOKIE = "token";
+
+// Issuer/audience must match microService/app/core/auth.py. The backend
+// rejects any token that isn't self-issued for the backend, so a token
+// minted by a different app (or a compromised signing flow elsewhere) can't
+// be replayed against the API.
+export const JWT_ISSUER = "documind-frontend";
+export const JWT_AUDIENCE = "documind-backend";

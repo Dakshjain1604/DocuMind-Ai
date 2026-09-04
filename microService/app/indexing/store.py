@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 from app.config.settings import get_settings
-from app.retrieval.search import BM25Index
+from app.indexing.bm25 import BM25Index
 
 # A doc_hash is always sha256 hex. Anything else is rejected before it can
 # reach the filesystem: doc_hash arrives from user-controlled path params and

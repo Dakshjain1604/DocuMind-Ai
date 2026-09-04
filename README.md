@@ -106,18 +106,33 @@ npm run dev                   # http://localhost:3000
 
 `/Dashboard` is behind auth, so sign up once at `/signup` before using it.
 
+**Docker compose (recommended for deployment)**
+
+Both services ship production Dockerfiles (pinned bases, non-root, healthchecks;
+the frontend uses Next's `output: "standalone"`). From the repo root:
+
+```bash
+echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
+echo "OPENROUTER_API_KEY=sk-or-..." >> .env
+docker compose up --build -d     # frontend on :3000, backend on :8000
+```
+
+Named volumes keep the vector index, uploads, trace DB and LLM/answer caches
+across restarts. The compose `JWT_SECRET` is the source of truth for both
+services — see [`.env.example`](.env.example).
+
 **Tests**
 
 ```bash
-cd microService && ./run_tests.sh        # 182 tests
+cd microService && ./run_tests.sh        # 186 tests
 cd frontend && npx tsc --noEmit && npm run lint && npm run test   # + npm run test:e2e (Playwright)
 ```
 
 ## Configuration
 
-The backend reads ~45 environment variables; these are the ones that matter.
+The backend reads ~60 environment variables; these are the ones that matter.
 Everything else is a retrieval tuning knob with a sensible default — see
-`microService/app/config/settings.py`.
+`microService/app/config/settings.py` and `microService/.env.example`.
 
 | Variable | Default | |
 |---|---|---|
@@ -128,13 +143,18 @@ Everything else is a retrieval tuning knob with a sensible default — see
 | `RAG_MAX_FILE_MB` | `100` | per-file upload cap |
 | `RAG_MAX_GRAPH_CHUNKS` | `25` | parent chunks sampled for graph extraction |
 | `RAG_GRAPH_EXTRACT_TIMEOUT_S` | `60` | per-chunk extraction budget |
+| `RAG_RETRIEVAL_TIMEOUT_S` | `30` | cap per retrieval leg (vector/BM25/graph) |
 | `RAG_RERANK_MODE` | `cross_encoder` | `cross_encoder` \| `llm` \| `off` |
 | `RAG_CORS_ORIGINS` | `http://localhost:3000` | comma-separated |
+| `RAG_TRUST_PROXY` | `false` | use `X-Forwarded-For` for rate limiting — **only** behind a proxy that overwrites it |
+| `RAG_LOG_LEVEL` | `INFO` | service log level |
 | `RAG_TESSERACT_CMD` | — | set if `tesseract` is not on `PATH` |
 
 Frontend: `RAG_BACKEND_URL` (default `http://localhost:8000`), `JWT_SECRET`
 (**required**, no fallback), `MONGODB_URI` (optional — accounts fall back to a
-local JSON file).
+local JSON file). The JWT is pinned to `iss=documind-frontend` /
+`aud=documind-backend` on both sides, so only tokens from this signin flow are
+accepted.
 
 **Changing `RAG_EMBED_MODEL` invalidates existing indexes.** Embeddings of
 different dimensions cannot be queried against the same Chroma collection; the
@@ -160,10 +180,16 @@ Worth stating plainly, because several of them shape what the output means.
   `owners` key at all and stay visible to everyone — a deliberate
   backward-compat choice, not a bug.
 - **The backend requires a valid JWT** (verified independently of the
-  frontend, `HS256`, shared `JWT_SECRET`) on every document-scoped route, and
-  is rate-limited per client IP (`/index` 5/min, `/query` 20/min, studio
-  routes 10/min by default). It still assumes it is not the public edge of
-  the system — put it behind the frontend, not directly on the internet.
+  frontend, `HS256`, shared `JWT_SECRET`, pinned `iss`/`aud`) on every
+  document-scoped route, and is rate-limited per client IP (`/index` 5/min,
+  `/query` 20/min, studio routes 10/min by default). It still assumes it is
+  not the public edge of the system — put it behind the frontend, not directly
+  on the internet. The Next middleware additionally returns `401` (not a page
+  redirect) for the ownership-sensitive `/api/rag/documents`, `/graph` and
+  `/trace` proxy routes when the session cookie is missing or invalid.
+- **Rate limiting sees one IP under compose.** The frontend proxies every
+  request from its own container address, so the limits cap the whole
+  deployment, not per-user traffic.
 - **Cost tracking is partial.** Token counts are recorded; `MODEL_PRICING` is
   empty, so costs report as unknown for most models.
 
@@ -187,8 +213,8 @@ frontend/
     components/        chat, graph, quiz, masterclass, mermaid
     api/rag/           proxy routes to the backend (see api/rag/_lib/proxy.ts)
     api/auth/          signup / signin / signout
-  lib/                 sse parsing, formatting, auth helpers
-  middleware.ts        gates /Dashboard
+  lib/                 sse parsing + fetch helper, formatting, copy-feedback hook, auth helpers
+  middleware.ts        gates /Dashboard + sensitive /api/rag/* routes (401 for APIs)
 ```
 
 ## License

@@ -4,7 +4,6 @@ NVIDIA NIM model: nvidia/nv-embedqa-e5-v5 (1024-dim, sub-second execution).
 Local fallback: BAAI/bge-small-en-v1.5 (384-dim).
 """
 from __future__ import annotations
-import os
 from functools import lru_cache
 from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -14,12 +13,12 @@ from app.config.settings import get_settings
 
 
 class NVIDIAEmbeddings(Embeddings):
-    def __init__(self, model: str = "nvidia/nv-embedqa-e5-v5", api_key: str | None = None, base_url: str | None = None):
+    def __init__(self, model: str, api_key: str, base_url: str):
+        # Credentials come in explicitly — never re-read env here. Settings is
+        # the single source of truth, and a bare constructor call with
+        # `api_key or os.environ.get(...)` once hid misconfiguration.
         self.model = model
-        self.client = OpenAI(
-            api_key=api_key or os.environ.get("NVIDIA_API_KEY", ""),
-            base_url=base_url or os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-        )
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not texts:

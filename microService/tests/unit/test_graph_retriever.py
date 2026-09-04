@@ -33,9 +33,3 @@ def test_traverse_includes_community_chunks():
     idx = GraphIndex(SAMPLE_GRAPH)
     chunks = idx.traverse_chunks(["Mitochondria"], hops=2)
     assert set(chunks) >= {1, 4}
-
-
-def test_community_summary_lookup():
-    idx = GraphIndex(SAMPLE_GRAPH)
-    assert idx.community_summary("Mitochondria") == "Energy production."
-    assert idx.community_summary("Unknown") is None

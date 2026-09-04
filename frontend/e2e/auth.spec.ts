@@ -6,7 +6,7 @@ test.describe("auth", () => {
     const user = uniqueUser();
     await signUp(page, user);
     await signIn(page, user);
-    await expect(page.getByRole("heading", { name: "DocuMind" }).or(page.locator("body"))).toBeVisible();
+    await expect(page.getByText("DocuMind").first()).toBeVisible();
     await expect(page).toHaveURL(/\/Dashboard/);
   });
 
@@ -20,7 +20,9 @@ test.describe("auth", () => {
     await signUp(page, user);
     await signIn(page, user);
 
-    await page.getByRole("button", { name: "Sign Out" }).click();
+    // The icon-only sign-out button in the sidebar is described by its
+    // aria-label (the dashboard chrome shows no text next to it).
+    await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/signin/, { timeout: 10_000 });
 
     await page.goto("/Dashboard");

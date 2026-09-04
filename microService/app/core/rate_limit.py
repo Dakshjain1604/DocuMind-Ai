@@ -12,7 +12,26 @@ from slowapi.util import get_remote_address
 
 from app.config.settings import get_settings
 
-limiter = Limiter(key_func=get_remote_address)
+
+def _client_key(request) -> str:
+    """Rate-limit key: the client IP as seen at the trusted edge.
+
+    Behind a reverse proxy the socket peer is the proxy itself, so every
+    request would otherwise collapse into one shared bucket. With
+    RAG_TRUST_PROXY=true the leftmost (original client) hop of
+    X-Forwarded-For is used. That header is only trustworthy when a proxy you
+    control actually sets it, which is why the default is "off" — a
+    directly-exposed service must not let callers rotate buckets with a
+    spoofed header.
+    """
+    if get_settings().trust_proxy:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_client_key)
 
 
 def query_limit() -> str:

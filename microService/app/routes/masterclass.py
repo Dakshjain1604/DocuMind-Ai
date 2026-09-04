@@ -1,15 +1,13 @@
 import json
 import logging
 import time
-from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
 from app.core.llm import get_llm
 from app.core.rate_limit import limiter, studio_limit
-from app.core.sse import sse_event, sse_error
+from app.core.sse import sse_stream_response
 from app.indexing.store import load_artifacts, artifacts_exist
 from app.core.observability import record_trace, new_request_id
 from app.routes.deps import require_owned
@@ -96,15 +94,18 @@ async def generate_learning_draft(
     request: Request, req: MasterclassRequest, user: dict = Depends(get_current_user)
 ):
     if not artifacts_exist(req.doc_hash):
-        raise HTTPException(status_code=404, detail="Document not found")
+        # Same status convention as /chapters: NOT_INDEXED carries a client-
+        # friendly body, not a bare HTTPException. The frontend surfaces this
+        # code to tell the user to re-index before opening the masterclass.
+        return fail(NOT_INDEXED, "doc_hash not indexed")
     require_owned(req.doc_hash, user)
 
     loaded = load_artifacts(req.doc_hash)
     sample = _get_document_sample(loaded, max_chunks=12)
     title = req.chapter_title or f"Chapter {req.chapter_id or 1}"
+    request_id = new_request_id()
 
-    async def event_generator() -> AsyncGenerator[str, None]:
-        request_id = new_request_id()
+    async def event_generator():
         start = time.perf_counter()
         acc = ""
         try:
@@ -116,8 +117,8 @@ async def generate_learning_draft(
             )
             async for delta, _model in stream:
                 acc += delta
-                yield sse_event("token", {"text": delta})
-            yield sse_event("done", {"doc_hash": req.doc_hash, "coverage": sample.coverage})
+                yield {"event": "token", "data": {"text": delta}}
+            yield {"event": "done", "data": {"doc_hash": req.doc_hash, "coverage": sample.coverage}}
             record_trace(
                 request_id, doc_hash=req.doc_hash, query=f"[learning_draft_{req.chapter_id}]",
                 total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
@@ -130,19 +131,12 @@ async def generate_learning_draft(
                 total_latency_ms=round((time.perf_counter() - start) * 1000, 1),
                 error=str(e),
             )
-            yield sse_error(str(e))
+            yield {"event": "error", "data": {"message": str(e), "partial": True}}
 
-    # Same headers as every other SSE route. Without no-transform /
-    # X-Accel-Buffering, a proxy will buffer this stream and it appears frozen.
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    # Shared SSE transport: heartbeat, disconnect handling, X-Request-Id, and
+    # the no-transform / X-Accel-Buffering headers every other streamed route
+    # uses. Without no-transform a proxy will buffer the stream until it dies.
+    return sse_stream_response(event_generator, request_id=request_id, partial_on_error=True)
 
 
 @router.post("/chapter-quiz")

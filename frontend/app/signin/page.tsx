@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import { AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import { AuthShell, AuthField } from "../components/AuthShell";
 import { Button } from "@/components/ui/button";
@@ -22,14 +21,27 @@ export default function SigninPage() {
     setSuccess("");
     setBusy(true);
     try {
-      await axios.post("/api/auth/signin", { email, password });
+      const res = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        let msg = "Sign in failed";
+        try {
+          const body = await res.json();
+          if (body?.message) msg = body.message;
+        } catch {
+          /* non-JSON error body; keep the generic message */
+        }
+        setError(msg);
+        setBusy(false);
+        return;
+      }
       setSuccess("Session opened · Redirecting to studio…");
       setTimeout(() => router.push("/Dashboard"), 900);
-    } catch (err: unknown) {
-      let msg = "Sign in failed";
-      if (axios.isAxiosError(err)) msg = err.response?.data?.message || msg;
-      else if (err instanceof Error) msg = err.message;
-      setError(msg);
+    } catch {
+      setError("Could not reach the server. Is it running?");
       setBusy(false);
     }
   };

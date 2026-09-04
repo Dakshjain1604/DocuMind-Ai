@@ -6,10 +6,7 @@ reranks, streams answer with citation prompting.
 from __future__ import annotations
 import asyncio
 import json
-import os
-import pickle
 import time
-from functools import lru_cache
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -26,8 +23,9 @@ from app.core.observability import (
     record_trace,
     timed_stage,
 )
+from app.indexing.bm25 import BM25Index
 from app.indexing.store import load_artifacts, artifacts_exist
-from app.retrieval.search import BM25Index, GraphIndex, reciprocal_rank_fusion, vector_search
+from app.retrieval.search import GraphIndex, reciprocal_rank_fusion, vector_search
 from app.retrieval.reranker import rerank
 from app.retrieval.rewriter import rewrite_query
 from app.prompts import ANSWER_SYSTEM_PROMPT, ANSWER_USER_PROMPT
@@ -85,10 +83,6 @@ def _load_parents(parents_path: str | None) -> dict[int, str]:
         return {}
     data = json.loads(p.read_text())
     return {int(k): v for k, v in data.items()}
-
-
-def _chunks_by_id(loaded: dict) -> dict[int, str]:
-    return loaded["chunks_by_id"]
 
 
 def _vector_search_chunks(chroma: Chroma, query: str, top_k: int) -> list[int]:
@@ -207,9 +201,12 @@ async def answer(
     safe_history = _sanitize_history(history)
 
     settings = get_settings()
-    loaded = _load_artifacts_cached(doc_hash)
+    # Artifact loading is disk+model-heavy (Chroma init, BM25 pickle, JSON):
+    # run it off the event loop. The _load_artifacts_cached LRU means repeat
+    # queries for the same doc pay this cost once, not per request.
+    loaded = await asyncio.to_thread(_load_artifacts_cached, doc_hash)
     chroma, bm25, graph_idx = loaded["chroma"], loaded["bm25"], loaded["graph_idx"]
-    chunks_by_id = _chunks_by_id(loaded)
+    chunks_by_id = loaded["chunks_by_id"]
 
     # Answer cache: only for fresh (no-history) questions, keyed on the
     # content itself (doc_hash + normalized query) — correctness never
@@ -248,8 +245,13 @@ async def answer(
             stage_records[-1]["degraded"] = True
 
         async def safe(fn, *, leg: str):
+            """Run a retrieval leg in a thread, bounded by
+            RAG_RETRIEVAL_TIMEOUT_S so a hung model/chroma call can neither
+            stall the event loop nor hold a worker thread forever."""
             try:
-                return await asyncio.to_thread(fn)
+                return await asyncio.wait_for(
+                    asyncio.to_thread(fn), timeout=settings.retrieval_timeout_s
+                )
             except Exception as e:
                 log_event(
                     "stage_err", stage="retrieval", request_id=request_id, leg=leg,
@@ -383,11 +385,12 @@ async def answer(
             )
     except Exception as e:
         error_text = str(e)
-        # Emit a frame the client can render, then re-raise. Swallowing it here
-        # meant the stream ended on `error` with no `done`, and the transport's
-        # disconnect handling never ran.
+        # Emit a single error frame the client can render, then stop the
+        # generator (not `raise`). Raising here made sse_stream_response's
+        # `framed()` wrapper catch the exception and emit a *second* error
+        # frame, so a failed query reached the client as a duplicate.
         yield {"event": "error", "data": {"message": str(e), "partial": True}}
-        raise
+        return
     finally:
         answer_text = "".join(answer_parts)
         # A stage's cost_usd is None when its model is unpriced (see

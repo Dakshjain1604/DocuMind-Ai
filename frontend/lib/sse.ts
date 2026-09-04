@@ -80,3 +80,21 @@ export async function readSseStream(res: Response, handlers: SseHandlers): Promi
     reader.releaseLock?.();
   }
 }
+
+/**
+ * Fetch a URL and drain its SSE stream through the same handlers.
+ *
+ * This is the pattern every streaming panel repeats (fetch, check status,
+ * read stream). Routing it through one function guarantees the caller's
+ * `signal` is attached to the fetch itself, so an AbortController actually
+ * cancels the underlying request — not just the client-side read.
+ */
+export async function sseFetch(
+  url: string,
+  init: RequestInit,
+  handlers: SseHandlers
+): Promise<Response> {
+  const res = await fetch(url, { cache: "no-store", ...init });
+  await readSseStream(res, handlers);
+  return res;
+}

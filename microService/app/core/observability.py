@@ -2,8 +2,8 @@
 queryable SQLite trace store (one row per query, GET /trace/{request_id})."""
 from __future__ import annotations
 import json
+import logging
 import sqlite3
-import sys
 import time
 import uuid
 from contextlib import contextmanager
@@ -13,6 +13,8 @@ from typing import Any
 import tiktoken
 
 from app.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def count_tokens(text: str, model_name: str = "gpt-3.5-turbo") -> int:
@@ -24,8 +26,12 @@ def count_tokens(text: str, model_name: str = "gpt-3.5-turbo") -> int:
 
 
 def log_event(event: str, **fields) -> None:
-    line = json.dumps({"ts": time.time(), "event": event, **fields}, default=str)
-    print(line, file=sys.stdout, flush=True)
+    # Structured event line on the standard logging system (was print() to
+    # stdout, which bypassed configure_logging entirely and couldn't be
+    # levelled/redirected). INFO keeps the per-stage diagnostics visible under
+    # the default RAG_LOG_LEVEL; operators can silence them by raising it.
+    line = json.dumps({"event": event, **fields}, default=str)
+    logger.info("%s", line)
 
 
 @contextmanager
@@ -83,6 +89,10 @@ def init_trace_db(db_path: str | None = None) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(p)
     try:
+        # WAL lets the read path (GET /trace, /telemetry/stats) and the write
+        # path (every query/index) run without serializing on each other's
+        # locks — cheap and meaningful under even modest load.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS traces (

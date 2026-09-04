@@ -91,7 +91,7 @@ async def test_pipeline_translates_parent_source_chunks_to_child_chunk_ids(tmp_p
 async def test_pipeline_skips_when_artifacts_exist(tmp_path, monkeypatch):
     monkeypatch.setenv("RAG_PERSIST_DIR", str(tmp_path))
     from app.indexing.store import doc_hash_from_bytes, doc_dir
-    from app.retrieval.search import BM25Index
+    from app.indexing.bm25 import BM25Index
     import json
 
     content = b"already-indexed"

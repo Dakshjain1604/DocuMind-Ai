@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import axios from "axios";
 import { Send, Copy, Check, Lightbulb, AlertCircle, Terminal, Trash2, ArrowRight, Gauge } from "lucide-react";
 import { CitationChip } from "./CitationChip";
-import { readSseStream } from "@/lib/sse";
+import { sseFetch } from "@/lib/sse";
+import { useCopyFeedback } from "@/lib/useCopyFeedback";
 import { parseCitationSegments } from "@/lib/citations";
 import { Button } from "@/components/ui/button";
 import { Citation } from "../Dashboard/types";
@@ -58,17 +58,21 @@ export function ChatStream({
   const [query, setQuery] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [suggestedQueries, setSuggestedQueries] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const { copiedId, markCopied } = useCopyFeedback();
+  const askAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, [docHash]);
 
+  // A document switch (or unmount) must cut off any in-flight stream — both
+  // this panel's own turn and the summary the parent may be generating.
   useEffect(() => {
     setTurns([]);
+    return () => askAbortRef.current?.abort();
   }, [docHash]);
 
   // Grounded in this specific document, not a fixed generic set - and simply
@@ -77,12 +81,16 @@ export function ChatStream({
   useEffect(() => {
     let cancelled = false;
     setSuggestedQueries([]);
-    axios
-      .post("/api/rag/suggested-questions", { doc_hash: docHash })
-      .then((res) => {
+    fetch("/api/rag/suggested-questions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ doc_hash: docHash }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
         if (cancelled) return;
-        if (res.data?.success && Array.isArray(res.data.data?.questions)) {
-          setSuggestedQueries(res.data.data.questions);
+        if (data?.success && Array.isArray(data.data?.questions)) {
+          setSuggestedQueries(data.data.questions);
         }
       })
       .catch(() => {
@@ -126,41 +134,49 @@ export function ChatStream({
     const t = newTurn(q);
     setTurns((ts) => [...ts, t]);
     setBusy(true);
+    const controller = new AbortController();
+    askAbortRef.current = controller;
+    let acc = "";
 
     try {
-      const r = await fetch("/api/rag/query", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ doc_hash: docHash, query: q, history }),
-      });
+      // sseFetch wires `signal` into the fetch itself, so aborting the
+      // controller cancels the upstream request rather than just the read.
+      const r = await sseFetch(
+        "/api/rag/query",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ doc_hash: docHash, query: q, history }),
+          signal: controller.signal,
+        },
+        {
+          onError: (message) => updateTurn(t.id, { error: message, answer: acc }),
+          onEvent: (evt, data: { citations?: Citation[]; text?: string; message?: string }) => {
+            if (evt === "context") {
+              updateTurn(t.id, { citations: data.citations ?? [] });
+            } else if (evt === "token") {
+              acc += data.text ?? "";
+              updateTurn(t.id, { answer: acc });
+            } else if (evt === "error") {
+              updateTurn(t.id, { error: data.message ?? "stream error", answer: acc });
+            }
+          },
+        }
+      );
       const requestId = r.headers.get("X-Request-Id");
       if (requestId) updateTurn(t.id, { requestId });
-      let acc = "";
-      await readSseStream(r, {
-        onError: (message) => updateTurn(t.id, { error: message, answer: acc }),
-        onEvent: (evt, data: { citations?: Citation[]; text?: string; message?: string }) => {
-          if (evt === "context") {
-            updateTurn(t.id, { citations: data.citations ?? [] });
-          } else if (evt === "token") {
-            acc += data.text ?? "";
-            updateTurn(t.id, { answer: acc });
-          } else if (evt === "error") {
-            updateTurn(t.id, { error: data.message ?? "stream error", answer: acc });
-          }
-        },
-      });
       updateTurn(t.id, { busy: false });
     } catch {
       updateTurn(t.id, { busy: false, error: "The request could not be completed." });
     } finally {
+      askAbortRef.current = null;
       setBusy(false);
     }
   }, [docHash, busy, updateTurn, turns]);
 
   const handleCopyAnswer = (turnId: string, answerText: string) => {
     navigator.clipboard.writeText(answerText);
-    setCopiedId(turnId);
-    setTimeout(() => setCopiedId(null), 2000);
+    markCopied(turnId);
   };
 
   const clear = useCallback(() => setTurns([]), []);

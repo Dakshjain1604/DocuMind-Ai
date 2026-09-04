@@ -3,14 +3,10 @@ Fusion combiner that merges their rankings — grouped together since none of
 these are ever used independently of the others in orchestrator.py's fan-out.
 """
 from __future__ import annotations
-import pickle
-import re
 from collections import defaultdict
-from pathlib import Path
 from typing import Hashable, Sequence
 
 from langchain_chroma import Chroma
-from rank_bm25 import BM25Okapi
 
 
 def vector_search(
@@ -29,40 +25,6 @@ def vector_search(
             continue
         out.append((int(cid), -float(distance)))
     return out
-
-
-_token_re = re.compile(r"\w+")
-
-
-def _tokenize(text: str) -> list[str]:
-    return [t.lower() for t in _token_re.findall(text)]
-
-
-class BM25Index:
-    """In-memory BM25 over chunk text."""
-
-    def __init__(self, tokenized_corpus: list[list[str]]) -> None:
-        self._tokens = tokenized_corpus
-        self._bm25 = BM25Okapi(tokenized_corpus) if tokenized_corpus else None
-
-    @classmethod
-    def build(cls, corpus: list[str]) -> "BM25Index":
-        return cls([_tokenize(t) for t in corpus])
-
-    def search(self, query: str, *, top_k: int = 10) -> list[tuple[int, float]]:
-        if self._bm25 is None:
-            return []
-        q = _tokenize(query)
-        scores = self._bm25.get_scores(q)
-        ranked = sorted(enumerate(scores), key=lambda kv: kv[1], reverse=True)
-        return ranked[:top_k]
-
-    def save(self, path: str | Path) -> None:
-        Path(path).write_bytes(pickle.dumps(self._tokens))
-
-    @classmethod
-    def load(cls, path: str | Path) -> "BM25Index":
-        return cls(pickle.loads(Path(path).read_bytes()))
 
 
 class GraphIndex:
@@ -120,12 +82,6 @@ class GraphIndex:
                 seen.add(c)
                 out.append(c)
         return out
-
-    def community_summary(self, entity_id: str) -> str | None:
-        cid = self._comm.get(entity_id)
-        if cid is None:
-            return None
-        return self._summaries.get(int(cid))
 
     def distinct_community_summaries(self, entities: list[str]) -> list[tuple[int, str]]:
         """Unique (community_id, summary) pairs across the given matched

@@ -287,7 +287,9 @@ async def test_answer_persists_trace_with_stages_and_context(fake_loaded, tmp_pa
 @pytest.mark.asyncio
 async def test_answer_persists_partial_trace_on_error(fake_loaded, tmp_path, monkeypatch):
     """If generation raises mid-stream, a trace record should still be
-    written (partial answer, error message) rather than silently lost."""
+    written (partial answer, error message) rather than silently lost, and the
+    stream should end on a single `error` frame — not re-raise, which used to
+    produce a duplicate error frame via the sse transporter's wrapper."""
     monkeypatch.setenv("RAG_TRACE_DB_PATH", str(tmp_path / "traces.db"))
 
     async def fake_rewrite(q, *, n_variants=0, **_kwargs):
@@ -307,14 +309,11 @@ async def test_answer_persists_partial_trace_on_error(fake_loaded, tmp_path, mon
          patch("app.retrieval.orchestrator.get_llm") as gl:
         gl.return_value.stream = fake_stream
         events = []
-        # answer() emits an `error` frame and then re-raises, so the transport
-        # can tell a real failure from a client disconnect. Collect what was
-        # streamed before the failure, then assert the trace was still written.
-        with pytest.raises(RuntimeError, match="connection dropped"):
-            async for e in answer(doc_hash="abc", query="what is it?", request_id="trace-test-error"):
-                events.append(e)
+        # answer() emits an `error` frame and stops the generator cleanly.
+        async for e in answer(doc_hash="abc", query="what is it?", request_id="trace-test-error"):
+            events.append(e)
 
-    assert events[-1]["event"] == "error"
+    assert [e["event"] for e in events][-1] == "error"
     trace = get_trace("trace-test-error")
     assert trace is not None
     assert trace["error"] is not None
