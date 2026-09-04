@@ -73,3 +73,4 @@ microService/app/config/retrieval.json
 # microService/; large binary input, not source, regenerable via re-upload
 /tmp/
 /local_chroma/
+.vercel
