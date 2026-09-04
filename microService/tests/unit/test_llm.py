@@ -196,6 +196,10 @@ async def test_groq_client_completion(monkeypatch):
 
 def test_nvidia_provider_models_default_and_override(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+    # Pin the env explicitly so the "default" assertion is hermetic — it must
+    # not depend on whether the local/CI shell happens to export NVIDIA_MODEL_ANSWER
+    # (the autouse bypass_auth fixture imports app.main, which loads microService/.env).
+    monkeypatch.setenv("NVIDIA_MODEL_ANSWER", "meta/llama-3.1-8b-instruct")
     assert get_models_for_role("answer") == ["meta/llama-3.1-8b-instruct"]
 
     # Explicit override
