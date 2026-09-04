@@ -1,15 +1,48 @@
+# syntax=docker/dockerfile:1
 
-FROM    python:3.12
+FROM python:3.12-slim AS runtime
 
-WORKDIR ./app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-COPY . .
+WORKDIR /app
 
-RUN pip install -r requirements.txt
+# System deps for the scanned-PDF OCR fallback: pytesseract needs the
+# tesseract binary, pdf2image shells out to poppler's pdftoppm. Everything
+# else (torch-based embeddings, chroma, fastapi) comes from wheels.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Only the package, not the whole repo: keeps local_chroma/, tmp/, .venv/ and
+# any test fixtures out of the image.
+COPY app ./app
+
+# Non-root runtime user. The app writes to /data (chroma, uploads, traces,
+# answer/LLM caches), so those dirs are pre-created with the user's ownership.
+RUN useradd -m appuser \
+    && mkdir -p /data/chroma /data/uploads /data/traces /data/cache \
+    && chown -R appuser:appuser /data
+
+USER appuser
+
+# Persistence lives on mounted volumes (see docker-compose.yml); using /data
+# also means the non-root user can always write regardless of the overlay fs.
+ENV RAG_PERSIST_DIR=/data/chroma \
+    RAG_UPLOAD_DIR=/data/uploads \
+    RAG_TRACE_DB_PATH=/data/traces/traces.db \
+    RAG_CACHE_DIR=/data/cache
 
 EXPOSE 8000
 
-RUN useradd app
-USER app
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
 
+# Single worker: deterministic indexing lockfile behaviour and no intra-container
+# cache duplication. Scale horizontally on the container level if needed.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

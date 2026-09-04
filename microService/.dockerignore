@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+local_chroma
+test_local_chroma
+tmp
+.rag_cache
+traces.db

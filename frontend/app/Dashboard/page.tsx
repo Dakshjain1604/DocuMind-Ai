@@ -1,309 +1,905 @@
 "use client";
-import { UploadIcon } from "../icons/uploadIcon";
-import { Homecard } from "../components/HomeCard";
 
-import { useState} from "react";
-import axios from "axios";
-import { QuizCard } from "../components/QuizCard";
-import { ChatInput } from "../components/Chatinput";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+import Link from "next/link";
+import {
+  FileText,
+  Sparkles,
+  HelpCircle,
+  BookOpen,
+  UploadCloud,
+  Trash2,
+  Terminal,
+  Download,
+  RefreshCw,
+  AlertCircle,
+  Copy,
+  Check,
+  Zap,
+  ShieldAlert,
+  Presentation,
+  Network,
+  Plus,
+  LogOut,
+} from "lucide-react";
+
+import { QuizArena } from "../components/QuizArena";
+import { ChatStream } from "../components/ChatStream";
+import { GraphView } from "../components/GraphView";
+import { MasterclassStudio } from "../components/MasterclassStudio";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AuditFinding,
+  Coverage,
+  QuizCardType,
+  Slide,
+  StudioEnvelopeData,
+  StudioKey,
+  TelemetryStats,
+} from "./types";
+import { CoverageNote, EmptyState, ErrorBanner } from "@/components/ui/ErrorBanner";
+import { sseFetch } from "@/lib/sse";
+import { useCopyFeedback } from "@/lib/useCopyFeedback";
+import { formatSummaryMarkdown } from "@/lib/formatSummary";
+import { AuditPanel } from "./components/AuditPanel";
+import { AudioSlidesPanel } from "./components/AudioSlidesPanel";
+
+type View = "quiz" | "summary" | "chat" | "graph" | "masterclass" | "audit" | "audio" | "slides" | "none";
+type ProgressEvent = { stamp: string; label: string; tone?: "info" | "warn" };
+
+/**
+ * Payload shapes emitted by the backend indexing pipeline's SSE stream.
+ * Mirrors microService/app/indexing/pipeline.py — keep in sync.
+ */
+type IndexEventData = {
+  n_chunks?: number;
+  n_parents?: number;
+  status?: string;
+  total?: number;
+  sampled_from?: number;
+  skipped?: number;
+  done?: number;
+  stage?: string;
+  message?: string;
+  chunk_id?: number;
+  error?: string;
+  doc_hash?: string;
+  cached?: boolean;
+};
+type StoredDocument = {
+  doc_hash: string;
+  filename: string;
+  n_chunks: number;
+  created_at: number;
+};
+
+const MAX_FILE_MB = 100;
+const ACCEPTED_EXTS = [".pdf", ".txt", ".md", ".doc", ".docx"];
+
+function shortHash(h: string | null): string {
+  if (!h) return "—";
+  return `${h.slice(0, 6)}…${h.slice(-4)}`;
+}
+
+function hasAcceptedExt(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ACCEPTED_EXTS.some((ext) => lower.endsWith(ext));
+}
+
+function nowStamp() {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2, "0")}:${d
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
+}
+
+/**
+ * Turns one indexing SSE frame into a log line, or null for frames not worth
+ * showing. The backend emits nine distinct event names (chunking, embedding,
+ * extracting_graph, graph_progress, warning, detecting_communities,
+ * summarizing_communities, community_progress, done) — never a generic
+ * "progress" event.
+ */
+function describeIndexEvent(evt: string, data: IndexEventData): string | null {
+  switch (evt) {
+    case "chunking":
+      return data.n_chunks === undefined
+        ? "CHUNKING: splitting document into hierarchical chunks"
+        : `CHUNKING: ${data.n_chunks} child chunks across ${data.n_parents} parent chunks`;
+    case "embedding":
+      return data.status === "waiting"
+        ? "EMBEDDING: waiting for the vector index to finish"
+        : "EMBEDDING: building vector index";
+    case "extracting_graph":
+      return data.sampled_from === undefined
+        ? `EXTRACTING GRAPH: ${data.total} chunks queued`
+        : `EXTRACTING GRAPH: ${data.total} chunks queued (sampled from ${data.sampled_from})`;
+    case "graph_progress":
+      return `EXTRACTING GRAPH: ${data.done}/${data.total} chunks`;
+    case "detecting_communities":
+      return "DETECTING COMMUNITIES: running Louvain over the entity graph";
+    case "summarizing_communities":
+      return data.skipped
+        ? `SUMMARIZING COMMUNITIES: ${data.total} queued (${data.skipped} over the cap, skipped)`
+        : `SUMMARIZING COMMUNITIES: ${data.total} queued`;
+    case "community_progress":
+      return `SUMMARIZING COMMUNITIES: ${data.done}/${data.total}`;
+    case "warning":
+      return `WARNING${data.stage ? ` (${data.stage})` : ""}: ${
+        data.message ?? data.error ?? "unspecified"
+      }${data.chunk_id === undefined ? "" : ` · chunk ${data.chunk_id}`}`;
+    default:
+      return null;
+  }
+}
 
 export default function Dashboard() {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [quiz, setQuiz] = useState<{
-        total_questions: number;
-        cards: any[];
-    } | null>(null);
-    
-    const [summary, setSummary] = useState<string>("");
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState("");
-    const [view, setView] = useState<"quiz" | "summary" | "chat" | "none">(
-        "none"
-    );
-    const [chatMessages, setChatMessages] = useState<
-        { type: "user" | "ai"; message: string }[]
-    >([]);
-    const [currentQuery, setCurrentQuery] = useState("");
-    const [isRagMode, setIsRagMode] = useState(false);
-    
-    // scroll properties 
+  const [docHash, setDocHash] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<View>("none");
 
-    const scrollToSection = (id: string) => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-    };
-    
-    
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            setSelectedFile(file);
-            setQuiz(null);
+  // Persistent Document Library
+  const [libraryDocs, setLibraryDocs] = useState<StoredDocument[]>([]);
+
+  // System Telemetry Stats
+  const [telemetryStats, setTelemetryStats] = useState<TelemetryStats | null>(null);
+
+  // Signed-in identity (the dashboard chrome never showed this before, despite
+  // the JWT carrying it since signin).
+  const [currentUser, setCurrentUser] = useState<{ name?: string; email?: string } | null>(null);
+
+  // Multi-file Intake Queue Management
+  const [intakeFiles, setIntakeFiles] = useState<
+    Array<{ id: string; name: string; size: number; file: File; status: "queued" | "indexing" | "ready" | "error" }>
+  >([]);
+
+  // State for Summary
+  const [summary, setSummary] = useState<string>("");
+  const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
+  const { copiedId: copiedSummary, markCopied: markSummaryCopied } = useCopyFeedback();
+  const summaryAbortRef = useRef<AbortController | null>(null);
+
+  // State for Quiz
+  const [quizCards, setQuizCards] = useState<QuizCardType[]>([]);
+  const [isQuizLoading, setIsQuizLoading] = useState<boolean>(false);
+
+  // State for Compliance Audit
+  const [auditItems, setAuditItems] = useState<AuditFinding[]>([]);
+  const [isAuditLoading, setIsAuditLoading] = useState<boolean>(false);
+
+  // State for Audio Briefing
+  const [audioScript, setAudioScript] = useState<string>("");
+  const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
+  const { copiedId: copiedAudio, markCopied: markAudioCopied } = useCopyFeedback();
+
+  // State for Slide Deck
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [isSlidesLoading, setIsSlidesLoading] = useState<boolean>(false);
+
+  // Indexing Progress Telemetry
+  const [indexing, setIndexing] = useState<boolean>(false);
+  const [progressLog, setProgressLog] = useState<ProgressEvent[]>([]);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+
+  // Per-panel failure + sampling disclosure for the four studio artifacts.
+  const [studioErrors, setStudioErrors] = useState<Partial<Record<StudioKey, string>>>({});
+  const [studioCoverage, setStudioCoverage] = useState<Partial<Record<StudioKey, Coverage>>>({});
+
+  // Focus citation target from chat
+  const [focusChunk, setFocusChunk] = useState<number | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Load Library Documents & Telemetry on mount
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rag/documents", { cache: "no-store" });
+      const body = await res.json();
+      if (body.success && body.data?.documents) {
+        const docs = body.data.documents;
+        setLibraryDocs(docs);
+        // Functional setter so the callback has no `docHash` dependency (a
+        // reload triggered by a delete would otherwise close over a stale
+        // selection and re-select a purged document).
+        setDocHash((cur) => cur ?? docs[0]?.doc_hash ?? null);
+      }
+    } catch (err) {
+      console.error("Failed to load document library:", err);
+    }
+  }, []);
+
+  const loadTelemetry = useCallback(async () => {
+    try {
+      const res = await fetch("/api/rag/telemetry", { cache: "no-store" });
+      const body = await res.json();
+      if (body.success) {
+        setTelemetryStats(body.data);
+      }
+    } catch (err) {
+      console.error("Failed to load telemetry:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Abort any in-flight summary stream when the panel unmounts.
+    return () => summaryAbortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    loadLibrary();
+    loadTelemetry();
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setCurrentUser(data ? { name: data.name, email: data.email } : null))
+      .catch(() => setCurrentUser(null));
+  }, [loadLibrary, loadTelemetry]);
+
+  const selectActiveDocument = (hash: string) => {
+    setDocHash(hash);
+    setSummary("");
+    setQuizCards([]);
+    setAuditItems([]);
+    setAudioScript("");
+    setSlides([]);
+    setActiveView("summary");
+    fetchSummary(hash);
+  };
+
+  const deleteLibraryDoc = async (hash: string) => {
+    try {
+      const res = await fetch(`/api/rag/documents/${hash}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      setLibraryDocs((prev) => prev.filter((d) => d.doc_hash !== hash));
+      if (docHash === hash) {
+        setDocHash(null);
+        setActiveView("none");
+      }
+    } catch (err) {
+      console.error("Failed to delete document:", err);
+    }
+  };
+
+  const addFilesToQueue = (filesToAdd: File[]) => {
+    setIntakeError(null);
+    const valid = filesToAdd.filter((f) => {
+      if (!hasAcceptedExt(f.name)) {
+        setIntakeError(`Skipped ${f.name} — unsupported file format.`);
+        return false;
+      }
+      if (f.size > MAX_FILE_MB * 1024 * 1024) {
+        setIntakeError(`Skipped ${f.name} — exceeds ${MAX_FILE_MB}MB limit.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (valid.length === 0) return;
+
+    setIntakeFiles((prev) => {
+      const existingNames = new Set(prev.map((p) => p.name));
+      const newItems = valid
+        .filter((f) => !existingNames.has(f.name))
+        .slice(0, 5 - prev.length)
+        .map((f) => ({
+          id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: f.name,
+          size: f.size,
+          file: f,
+          status: "queued" as const,
+        }));
+      return [...prev, ...newItems];
+    });
+
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFilesToQueue(Array.from(e.target.files));
+    }
+    // Reset so choosing the same file again after removing it still fires.
+    e.target.value = "";
+  };
+
+  const removeFileFromQueue = (id: string) => {
+    setIntakeFiles((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  // Must clear the cookie server-side. This used to be a <Link href="/signin">,
+  // which navigated away but left the session valid.
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+    } finally {
+      // Full reload so the middleware re-evaluates from a clean state.
+      window.location.href = "/signin";
+    }
+  };
+
+  const triggerUpload = async () => {
+    if (intakeFiles.length === 0) return;
+    setIndexing(true);
+    setIntakeError(null);
+    setProgressLog([{ stamp: nowStamp(), label: `Initiating multi-file intake batch (${intakeFiles.length} file(s))` }]);
+
+    const formData = new FormData();
+    intakeFiles.forEach((item) => {
+      formData.append("files", item.file);
+    });
+
+    try {
+      await sseFetch(
+        "/api/rag/index",
+        { method: "POST", body: formData },
+        {
+          onError: (message) => {
+            throw new Error(message);
+          },
+          onEvent: (evt, data: IndexEventData) => {
+          if (evt === "done") {
+            const hash = data.doc_hash as string;
+            setDocHash(hash);
             setSummary("");
-            setChatMessages([]); // Clear chat history
-            setIsRagMode(false);
-            setError("");
-            setView("none");
-        }
-    };
-
-    function ClickHandle(location: string) {
-        
-        scrollToSection("text-box");
-        if (selectedFile) {
-            if (location === "/RAG") {
-                setIsRagMode(true);
-                setView("chat");
-                setChatMessages([]);
+            setQuizCards([]);
+            setAuditItems([]);
+            setAudioScript("");
+            setSlides([]);
+            setActiveView("summary");
+            fetchSummary(hash);
+            loadLibrary();
+            loadTelemetry();
+            setProgressLog((prev) => [
+              ...prev,
+              {
+                stamp: nowStamp(),
+                label: data.cached
+                  ? `Already indexed \u00b7 reused cached artifacts \u00b7 Hash ${shortHash(hash)}`
+                  : `Indexing complete \u00b7 Hash ${shortHash(hash)}`,
+              },
+            ]);
+            setIntakeFiles((prev) => prev.map((item) => ({ ...item, status: "ready" })));
+          } else if (evt === "error") {
+            throw new Error(data.message || "Indexing pipeline failure");
+          } else {
+            const label = describeIndexEvent(evt, data);
+            if (label) {
+              setProgressLog((prev) => [
+                ...prev,
+                { stamp: nowStamp(), label, tone: evt === "warning" ? "warn" : "info" },
+              ]);
             }
-            else {
-                handleApi(location);
+          }
+        },
+        }
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Pipeline processing failed.";
+      setIntakeError(message);
+      setProgressLog((prev) => [...prev, { stamp: nowStamp(), label: `ERROR: ${message}` }]);
+    } finally {
+      setIndexing(false);
+    }
+  };
+
+  const fetchSummary = async (hash: string) => {
+    // A new document selection (or unmount) supersedes the prior stream;
+    // abort it so a stale summary can't overwrite the new document's panel.
+    summaryAbortRef.current?.abort();
+    const controller = new AbortController();
+    summaryAbortRef.current = controller;
+
+    setIsSummarizing(true);
+    setSummary("");
+    setStudioErrors((prev) => ({ ...prev, summary: undefined }));
+    try {
+      let acc = "";
+      await sseFetch(
+        "/api/rag/summary",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ doc_hash: hash }),
+          signal: controller.signal,
+        },
+        {
+          onError: (message) =>
+            setStudioErrors((prev) => ({ ...prev, summary: message })),
+          onEvent: (evt, data: { text?: string; coverage?: Coverage; message?: string }) => {
+            if (evt === "token") {
+              acc += data.text ?? "";
+              setSummary(acc);
+            } else if (evt === "done") {
+              setStudioCoverage((prev) => ({ ...prev, summary: data.coverage }));
+            } else if (evt === "error") {
+              setStudioErrors((prev) => ({
+                ...prev,
+                summary: data.message ?? "Summary generation failed.",
+              }));
             }
-
-        } else {
-            alert("Please upload a file first.");
+          },
         }
+      );
+    } finally {
+      if (summaryAbortRef.current === controller) summaryAbortRef.current = null;
+      setIsSummarizing(false);
     }
+  };
 
-    async function handleChatQuery() {
-        if (!currentQuery.trim() || !selectedFile) return;
-        
-        setChatMessages(prev => [...prev, { type: 'user', message: currentQuery }]);
-        setIsLoading(true);
-        const formdata = new FormData();
-        formdata.append("file", selectedFile);
-        formdata.append("input", currentQuery);
-
-        try {
-            const response = await axios.post(`${BACKEND_URL}/RAG`, formdata, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 120000,
-            });
-          
-            setChatMessages(prev => [...prev, { type: 'ai', message: response.data.answer }]);
-            
-            setCurrentQuery("");
-        }
-        catch  {
-            setError("failed to get response from AI")
-        }
-        setIsLoading(false)
-
+  /**
+   * One request path for the four studio artifacts, which were previously four
+   * byte-identical fetchers that swallowed every failure into console.error.
+   * Now that the backend no longer substitutes invented content on error, a
+   * failure has to be surfaced or the panel would just sit blank.
+   */
+  const runStudioFetch = async <T,>(
+    key: StudioKey,
+    url: string,
+    hash: string,
+    pick: (data: StudioEnvelopeData) => T,
+    apply: (value: T) => void,
+    empty: T,
+    setLoading: (v: boolean) => void
+  ) => {
+    setLoading(true);
+    apply(empty);
+    setStudioErrors((prev) => ({ ...prev, [key]: undefined }));
+    setStudioCoverage((prev) => ({ ...prev, [key]: undefined }));
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ doc_hash: hash }),
+      });
+      const body = await res.json();
+      if (!body?.success) {
+        setStudioErrors((prev) => ({
+          ...prev,
+          [key]: body?.error?.message ?? "The service could not complete this request.",
+        }));
+        return;
+      }
+      apply(pick(body.data ?? {}));
+      setStudioCoverage((prev) => ({ ...prev, [key]: body.data?.coverage }));
+    } catch (err) {
+      console.error("Studio fetch failed:", err);
+      setStudioErrors((prev) => ({
+        ...prev,
+        [key]: "Request failed. Is the backend running?",
+      }));
+    } finally {
+      setLoading(false);
     }
-   
+  };
 
-
-
-    async function handleApi(endpoint: string) {
-        if (!selectedFile) {
-            alert("Please upload a file first.");
-            return;
-        }
-        setIsLoading(true);
-        setError("");
-        setQuiz(null);
-        setSummary("");
-        setView("none");
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        scrollToSection("text-box");
-        if (endpoint == "/RAG") {
-            handleChatQuery();
-        } else {
-            try {
-                // Post file to backend endpoint
-                const response = await axios.post(
-                    `${BACKEND_URL}`+`${endpoint}`,
-                    formData,
-                    {
-                        headers: { "Content-Type": "multipart/form-data" },
-                        timeout: 120000,
-                    }
-                );
-                console.log("API response:", response.data); // Debug log
-                // If quiz endpoint, extract quiz data from response
-                
-                if (endpoint === "/getQuiz" && response.data?.summary?.data?.cards) {
-                    setQuiz({
-                        total_questions: response.data.summary.data.total_questions,
-                        cards: response.data.summary.data.cards,
-                    });
-                    setView("quiz");
-                } else {
-                    // Otherwise, treat as summary
-                    let result = response.data.summary || response.data.result;
-                    if (typeof result !== "string") {
-                        result = response.data.message || "No summary available.";
-                    }
-                    setSummary(result);
-                    setView("summary");
-                }
-                setIsLoading(false);
-            } catch (e: unknown) {
-                console.error("API error:", e);
-            
-                let errorMsg = "Upload error occurred!";
-            
-                if (e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object") {
-                    const response = e.response as { data?: { message?: string } };
-                    if (response.data) {
-                        errorMsg = response.data.message || JSON.stringify(response.data);
-                    }
-                } else if (e instanceof Error) {
-                    errorMsg = e.message;
-                }
-            
-                setError(errorMsg);
-                setIsLoading(false);
-            }
-            
-        }
-    }
-
-
-    return (
-        <div className="flex flex-col items-center min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800">
-
-            <div className="w-full max-w-7xl flex-col flex justify-around font-sans items-center mx-auto py-4 sm:py-6 md:py-10 px-2 sm:px-4">
-                {/* Upload Section */}
-                <div className="flex w-full justify-center items-center mb-6 sm:mb-8 md:mb-10">
-                    <div className="flex flex-col justify-center items-center bg-white rounded-xl px-4 sm:px-6 md:px-10 py-6 md:py-8 shadow-lg border border-gray-200 w-full max-w-md sm:max-w-lg">
-                        <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl text-black font-sans font-bold mb-2 tracking-tight text-center">
-                            Super Charge Your Learning ⚡️
-                        </div>
-                        <div className="mb-2 mt-4">
-                            <UploadIcon />
-                        </div>
-                        <div className="text-black text-sm sm:text-base md:text-lg mb-2 text-center">
-                            Upload document (.pdf, .txt , .docx)
-                        </div>
-                        <div className="mt-2 w-full">
-                            <input
-                                onChange={handleFileChange}
-                                type="file"
-                                className="mt-2 block w-full text-xs sm:text-sm text-black file:hover:scale-105 file:mr-2 sm:file:mr-4 file:py-1.5 sm:file:py-2 file:px-2 sm:file:px-4 file:rounded-full file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-black file:text-white transition-all duration-200 file:animate-bounce"
-                                accept=".pdf,.txt,.doc,.docx"
-                            />
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Feature Cards Section */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8 w-full max-w-4xl mx-auto">
-                    <div className="w-full sm:w-1/3 max-w-xs">
-                        <Homecard
-                            heading="Quiz"
-                            mainText="Transform your study materials into engaging quizzes. Test your knowledge and reinforce learning with AI-generated questions."
-                            ButtonText="Generate Quiz"
-                            onClick={() => handleApi("/getQuiz")}
-                        />
-                    </div>
-                    <div className="w-full sm:w-1/3 max-w-xs">
-                        <Homecard
-                            heading="Summary"
-                            mainText="Get concise, intelligent summaries of your lengthy documents in seconds. Extract key insights without reading through pages of content."
-                            ButtonText="Summarize"
-                            onClick={() => handleApi("/getSummary")}
-                        />
-                    </div>
-                    <div className="w-full sm:w-1/3 max-w-xs">
-                        <Homecard
-                            heading="Custom Q&A"
-                            mainText="Ask any question about your documents and get precise, contextual answers. Your personal AI research assistant"
-                            ButtonText="Chat with AI"
-                            onClick={() => ClickHandle("/RAG")}
-                        />
-                    </div>
-                </div>
-            </div>
-            
-            {/* Disclaimer */}
-            <div className="opacity-50 text-center text-xs sm:text-sm px-4 mb-4"> 
-                The data is fetched from render(free version), so it might take a few seconds to respond due to inactivity! 
-            </div>
-            
-            {/* Results Section */}
-            <div
-                className="w-full max-w-6xl border-white border-2 flex justify-center mt-4 sm:mt-6 md:mt-10 rounded-xl min-h-[300px] sm:min-h-[400px] bg-gray-100/80 shadow-lg mx-2 sm:mx-4 lg:mx-auto"
-                id="text-box"
-            >
-                {/* Loading State */}
-                {isLoading && (
-                    <div className="flex justify-center items-center p-4">
-                        <span className="text-black flex flex-col sm:flex-row text-base sm:text-xl items-center text-center">
-                            <span className="mb-2 sm:mb-0 text-lg text-black">Loading ...</span>
-                            {/* <div className="sm:pl-5">
-                                <LoadingIcon />
-                            </div> */}
-                            <div className=" text-x2l bg-transparent py-10 animate-bounce"> 📚 📝 📘 📙 📑 💻 🖥️ </div>
-                        </span>
-                    </div>
-                )}
-                
-                {/* Error State */}
-                {!isLoading && error && (
-                    <div className="bg-red-50 p-4 m-2 sm:m-4 rounded-xl shadow-inner border border-red-200 w-full">
-                        <h3 className="text-base sm:text-lg font-semibold mb-2 text-red-900">Error:</h3>
-                        <div className="text-red-700 text-sm sm:text-base break-words">{error}</div>
-                    </div>
-                )}
-                
-                {/* Quiz cards rendering */}
-                {!isLoading && view === "quiz" && quiz && quiz.cards.length > 0 && (
-                    <div className="w-full grid gap-4 sm:gap-6 p-2 sm:p-4">
-                        <div className="mb-2 sm:mb-4 text-lg sm:text-xl font-bold text-gray-800 bg-white px-4 sm:px-6 py-2 sm:py-3 rounded shadow">
-                            Total Questions: {quiz.total_questions}
-                        </div>
-                        {quiz.cards.map((card) => (
-                            <QuizCard key={card.id} card={card} />
-                        ))}
-                    </div>
-                )}
-                
-                {/* Summary rendering */}
-                {!isLoading && view === "summary" && summary && (
-                    <div className="bg-blue-50 p-2 sm:p-4 m-2 sm:m-4 rounded-xl shadow-inner max-h-full overflow-y-auto border border-blue-200 w-full">
-                        <h3 className="text-base sm:text-lg font-semibold mb-2 text-blue-900">
-                            Document Summary:
-                        </h3>
-                        <div className="whitespace-pre-wrap prose max-w-none p-2 text-gray-900 font-bold text-sm sm:text-base">
-                            <Markdown>{summary}</Markdown>
-                        </div>
-                    </div>
-                )}
-
-                {/* Chat rendering */}
-                {!isLoading && view === "chat" && isRagMode && (
-                    <div className="w-full p-2 sm:p-4 text-black">
-                        <div className="mb-4 max-h-64 sm:max-h-96 overflow-y-bottom space-y-3" >
-                            {chatMessages.map((msg, idx) => (
-                                <div key={idx} className={`p-2 sm:p-3 rounded-lg text-sm sm:text-base ${
-                                    msg.type === 'user' 
-                                        ? 'bg-blue-100 ml-auto max-w-[85%] sm:max-w-xs' 
-                                        : 'bg-gray-100 mr-auto max-w-[90%] sm:max-w-md'
-                                }`}>
-                                    <div className="text-xs sm:text-sm font-semibold mb-1">
-                                        {msg.type === 'user' ? 'You' : 'AI'}
-                                    </div>
-                                    <div className="break-words bottom-0"  >{msg.message}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <ChatInput 
-                            currentQuery={currentQuery}
-                            setCurrentQuery={setCurrentQuery}
-                            handleChatQuery={handleChatQuery}
-                            isLoading={isLoading}
-                            
-                        />
-                    </div>
-                )}
-            </div>
-            
-        </div>
+  const fetchQuiz = (hash: string) =>
+    runStudioFetch<QuizCardType[]>(
+      "quiz", "/api/rag/quiz", hash,
+      (d) => (d.cards as QuizCardType[]) ?? [], setQuizCards, [], setIsQuizLoading
     );
+
+  const fetchComplianceAudit = (hash: string) =>
+    runStudioFetch<AuditFinding[]>(
+      "audit", "/api/rag/compliance-audit", hash,
+      (d) => (d.audit as AuditFinding[]) ?? [], setAuditItems, [], setIsAuditLoading
+    );
+
+  const fetchAudioBriefing = (hash: string) =>
+    runStudioFetch<string>(
+      "audio", "/api/rag/audio-briefing", hash,
+      (d) => (d.script as string) ?? "", setAudioScript, "", setIsAudioLoading
+    );
+
+  const fetchSlideDeck = (hash: string) =>
+    runStudioFetch<Slide[]>(
+      "slides", "/api/rag/slide-deck", hash,
+      (d) => (d.slides as Slide[]) ?? [], setSlides, [], setIsSlidesLoading
+    );
+
+  const handleCardClick = (view: View) => {
+    if (!docHash) return;
+    setActiveView(view);
+    if (view === "summary" && !summary) fetchSummary(docHash);
+    if (view === "quiz" && quizCards.length === 0) fetchQuiz(docHash);
+    if (view === "audit" && auditItems.length === 0) fetchComplianceAudit(docHash);
+    if (view === "audio" && !audioScript) fetchAudioBriefing(docHash);
+    if (view === "slides" && slides.length === 0) fetchSlideDeck(docHash);
+  };
+
+  const copySummaryToClipboard = () => {
+    if (!summary) return;
+    navigator.clipboard.writeText(summary);
+    markSummaryCopied();
+  };
+
+  const downloadSummaryMarkdown = () => {
+    if (!summary) return;
+    const blob = new Blob([summary], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `DocuMind_Summary_${shortHash(docHash)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const TOOLS: { view: View; label: string; icon: React.ReactNode }[] = [
+    { view: "chat", label: "Query Console", icon: <Sparkles className="h-4 w-4" /> },
+    { view: "summary", label: "Summary", icon: <FileText className="h-4 w-4" /> },
+    { view: "quiz", label: "Quiz Arena", icon: <HelpCircle className="h-4 w-4" /> },
+    { view: "masterclass", label: "Masterclass", icon: <BookOpen className="h-4 w-4" /> },
+    { view: "graph", label: "Knowledge Atlas", icon: <Network className="h-4 w-4" /> },
+    { view: "audit", label: "Compliance Audit", icon: <ShieldAlert className="h-4 w-4" /> },
+    { view: "slides", label: "Audio & Slides", icon: <Presentation className="h-4 w-4" /> },
+  ];
+
+  const VIEW_TITLES: Record<View, string> = {
+    none: "",
+    summary: "Summary",
+    chat: "Query Console",
+    quiz: "Quiz Arena",
+    graph: "Knowledge Atlas",
+    masterclass: "Masterclass",
+    audit: "Compliance Audit",
+    audio: "Audio Briefing",
+    slides: "Audio & Slide Deck",
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-100 font-sans selection:bg-white/20">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_EXTS.join(",")}
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {/* ── LEFT SIDEBAR ──────────────────────────────────────────── */}
+      <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-zinc-950">
+        <Link href="/" className="flex items-center gap-2.5 px-4 py-4">
+          <span className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+          <span className="font-display text-base font-bold tracking-tight text-white">
+            DocuMind
+          </span>
+        </Link>
+
+        {/* Upload */}
+        <div
+          className="px-3"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files?.length) {
+              addFilesToQueue(Array.from(e.dataTransfer.files));
+            }
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              isDragging
+                ? "border-white/40 bg-white/10 text-white"
+                : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+            }`}
+          >
+            <Plus className="h-4 w-4" />
+            <span>Upload document</span>
+          </button>
+
+          {intakeFiles.length > 0 && (
+            <div className="mt-2 space-y-1.5 rounded-lg border border-white/10 bg-zinc-900/60 p-2">
+              {intakeFiles.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate text-zinc-300">{item.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${item.name} from queue`}
+                    onClick={() => removeFileFromQueue(item.id)}
+                    className="shrink-0 text-zinc-500 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                onClick={triggerUpload}
+                disabled={indexing}
+                size="sm"
+                className="mt-1 w-full gap-1.5 bg-white text-zinc-950 hover:bg-zinc-200"
+              >
+                {indexing ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Indexing…</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Index {intakeFiles.length} file{intakeFiles.length > 1 ? "s" : ""}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {intakeError && (
+            <div role="alert" aria-live="polite" className="mt-2 flex items-start gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{intakeError}</span>
+            </div>
+          )}
+
+          {progressLog.length > 0 && (
+            <div className="mt-2 max-h-28 overflow-y-auto space-y-1 rounded-lg border border-white/10 bg-zinc-950 p-2 font-mono text-[10px]">
+              <div className="flex items-center gap-1.5 text-zinc-500 pb-1">
+                <Terminal className="h-3 w-3" />
+                <span>{progressLog.length} events</span>
+              </div>
+              {progressLog.map((ev, i) => (
+                <div key={i} className={ev.tone === "warn" ? "text-amber-300" : "text-zinc-400"}>
+                  {ev.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Document list */}
+        {libraryDocs.length > 0 && (
+          <div className="mt-4 flex-1 overflow-y-auto px-3 space-y-0.5">
+            <div className="px-1 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
+              Documents
+            </div>
+            {libraryDocs.map((doc) => {
+              const isActive = docHash === doc.doc_hash;
+              return (
+                <div
+                  key={doc.doc_hash}
+                  data-testid="doc-library-item"
+                  onClick={() => selectActiveDocument(doc.doc_hash)}
+                  className={`group flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                    isActive ? "bg-white/10 text-white" : "text-zinc-300 hover:bg-white/5"
+                  }`}
+                >
+                  <span className="truncate">{doc.filename}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteLibraryDoc(doc.doc_hash);
+                    }}
+                    aria-label="Delete document"
+                    title="Delete document"
+                    className="shrink-0 text-zinc-500 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Tools nav */}
+        <nav className={`px-3 py-3 space-y-0.5 border-t border-white/10 ${libraryDocs.length === 0 ? "mt-4" : ""}`}>
+          <div className="px-1 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
+            Tools
+          </div>
+          {TOOLS.map((t) => (
+            <button
+              key={t.view}
+              type="button"
+              disabled={!docHash}
+              onClick={() => handleCardClick(t.view)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                activeView === t.view ? "bg-white/10 text-white font-medium" : "text-zinc-300 hover:bg-white/5"
+              }`}
+            >
+              {t.icon}
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Account */}
+        <div className="border-t border-white/10 px-3 py-3">
+          {telemetryStats && (
+            <div className="px-1 pb-2 font-mono text-[10px] text-zinc-600">
+              {telemetryStats.total_requests ?? 0} requests · {telemetryStats.avg_latency_ms ?? 0}ms avg
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="truncate text-xs text-zinc-500">
+              {currentUser?.name || currentUser?.email || ""}
+            </span>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              title="Sign out"
+              className="shrink-0 text-zinc-500 hover:text-white transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto">
+        {!docHash ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-6">
+            <UploadCloud className="h-10 w-10 text-zinc-600" />
+            <p className="text-lg font-semibold text-white">Upload a document to get started</p>
+            <p className="max-w-sm text-sm text-zinc-500">
+              PDF (with OCR), TXT, Markdown, or Word - up to {MAX_FILE_MB}MB. Use the sidebar to add one.
+            </p>
+          </div>
+        ) : activeView === "none" ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-6">
+            <Sparkles className="h-10 w-10 text-zinc-600" />
+            <p className="text-lg font-semibold text-white">Choose a tool from the sidebar</p>
+            <p className="max-w-sm text-sm text-zinc-500">
+              Ask questions, generate a summary, or explore the knowledge atlas for this document.
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-4xl px-8 py-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-semibold text-white">{VIEW_TITLES[activeView]}</h1>
+
+              {activeView === "summary" && summary && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={copySummaryToClipboard} className="gap-1.5">
+                    {copiedSummary ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-zinc-400" />}
+                    <span>{copiedSummary ? "Copied" : "Copy"}</span>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={downloadSummaryMarkdown} className="gap-1.5">
+                    <Download className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Export .MD</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* View: Summary */}
+            {activeView === "summary" && (
+              <Card className="p-8">
+                {isSummarizing && !summary && (
+                  <div className="py-20 space-y-4">
+                    <Skeleton className="h-8 w-2/3" />
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                    <div className="text-center font-mono text-xs text-zinc-400 pt-2">
+                      Synthesizing executive summary &amp; topical takeaways…
+                    </div>
+                  </div>
+                )}
+
+                {!isSummarizing && studioErrors.summary && (
+                  <ErrorBanner
+                    message={studioErrors.summary}
+                    onRetry={() => docHash && fetchSummary(docHash)}
+                  />
+                )}
+
+                {summary && (
+                  // Bounded + internally scrollable so a long streaming summary
+                  // grows this panel, not the whole page - the panel stays put
+                  // and new tokens scroll inside it instead.
+                  <div className="max-h-[70vh] overflow-y-auto pr-2">
+                    <article className="prose prose-invert max-w-none text-zinc-300 leading-relaxed prose-h1:text-2xl prose-h1:font-bold prose-h1:text-white prose-h2:text-lg prose-h2:font-semibold prose-h2:text-white prose-h2:mt-6 prose-p:text-sm prose-p:leading-relaxed prose-strong:text-white prose-blockquote:border-l-2 prose-blockquote:border-white/30 prose-blockquote:bg-zinc-900/60 prose-blockquote:p-4 prose-blockquote:rounded-r-xl">
+                      <Markdown>{formatSummaryMarkdown(summary)}</Markdown>
+                    </article>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* View: Query Console */}
+            {activeView === "chat" && (
+              <Card className="p-6">
+                <ChatStream
+                  docHash={docHash}
+                  onCiteClick={(cid) => {
+                    setFocusChunk(cid);
+                    setActiveView("graph");
+                  }}
+                />
+              </Card>
+            )}
+
+            {/* View: Quiz Arena */}
+            {activeView === "quiz" && (
+              <div>
+                {isQuizLoading && (
+                  <Card className="p-12 text-center space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                    <div className="font-mono text-xs text-zinc-400">
+                      Generating volume-adaptive examination questions…
+                    </div>
+                  </Card>
+                )}
+
+                {!isQuizLoading && studioErrors.quiz && (
+                  <ErrorBanner
+                    message={studioErrors.quiz}
+                    onRetry={() => docHash && fetchQuiz(docHash)}
+                  />
+                )}
+
+                {!isQuizLoading && !studioErrors.quiz && quizCards.length === 0 && (
+                  <EmptyState message="No usable questions could be generated from this document." />
+                )}
+
+                {!isQuizLoading && quizCards.length > 0 && (
+                  <div className="space-y-3">
+                    <QuizArena cards={quizCards} />
+                    <CoverageNote coverage={studioCoverage.quiz} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* View: Knowledge Atlas Graph */}
+            {activeView === "graph" && (
+              <GraphView docHash={docHash} highlightNode={focusChunk ? String(focusChunk) : null} />
+            )}
+
+            {/* View: Masterclass Studio */}
+            {activeView === "masterclass" && (
+              <MasterclassStudio docHash={docHash} />
+            )}
+
+            {/* View: Compliance & Risk Audit */}
+            {activeView === "audit" && (
+              <AuditPanel
+                loading={isAuditLoading}
+                items={auditItems}
+                error={studioErrors.audit}
+                coverage={studioCoverage.audit}
+                onRetry={() => docHash && fetchComplianceAudit(docHash)}
+              />
+            )}
+
+            {/* View: Audio & Slide Deck Studio */}
+            {activeView === "slides" && (
+              <AudioSlidesPanel
+                audio={{
+                  script: audioScript,
+                  loading: isAudioLoading,
+                  error: studioErrors.audio,
+                  coverage: studioCoverage.audio,
+                  copied: Boolean(copiedAudio),
+                  onGenerate: () => docHash && fetchAudioBriefing(docHash),
+                  onCopy: () => {
+                    navigator.clipboard?.writeText(audioScript);
+                    markAudioCopied();
+                  },
+                }}
+                slides={{
+                  items: slides,
+                  loading: isSlidesLoading,
+                  error: studioErrors.slides,
+                  coverage: studioCoverage.slides,
+                  onGenerate: () => docHash && fetchSlideDeck(docHash),
+                }}
+              />
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }

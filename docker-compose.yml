@@ -1,0 +1,57 @@
+name: documind
+
+# One verified command to bring the full stack up:
+#
+#     echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
+#     echo "OPENROUTER_API_KEY=sk-or-..." >> .env
+#     docker compose up --build -d
+#
+# Then open http://localhost:3000 (signup provisions a local user, signin is
+# a signed JWT that the backend verifies with the same JWT_SECRET).
+
+services:
+  backend:
+    build:
+      context: ./microService
+    environment:
+      # Must be byte-for-byte identical to the frontend's value — the frontend
+      # signs tokens with it, this service verifies them (see app/core/auth.py).
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a repo-root .env (openssl rand -hex 32)}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      RAG_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      # The frontend proxies every request through its own IP, so the backend
+      # only ever sees one address. Do NOT set true here — there is no reverse
+      # proxy in front of the frontend to sanitize the header.
+      RAG_TRUST_PROXY: "false"
+    volumes:
+      - documind_chroma:/data/chroma
+      - documind_uploads:/data/uploads
+      - documind_traces:/data/traces
+      - documind_cache:/data/cache
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        JWT_SECRET: ${JWT_SECRET}
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      RAG_BACKEND_URL: http://backend:8000
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  documind_chroma:
+  documind_uploads:
+  documind_traces:
+  documind_cache:

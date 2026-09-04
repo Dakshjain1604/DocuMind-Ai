@@ -1,16 +1,18 @@
-// app/api/auth/signin/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { connectToMongoDB } from "@/lib/mongodb";
-import User from "@/models/userModel"; 
-const JWT_SECRET=process.env.JWT_SECRET || "changeme";
-export async function POST(req: NextRequest) {
-  await connectToMongoDB();
+import { SignJWT } from "jose";
+import { findUserByEmail } from "@/lib/userStore";
+import {
+  AUTH_COOKIE,
+  JWT_AUDIENCE,
+  JWT_ISSUER,
+  getJwtSecretKey,
+} from "@/lib/auth";
 
+export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
-    console.log(email,password)
+
     if (!email || !password) {
       return NextResponse.json(
         { message: "Email and password are required." },
@@ -18,41 +20,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findOne({ email });
-    console.log(user)
+    const user = await findUserByEmail(email);
     if (!user) {
       return NextResponse.json(
-        { message: "Invalid credentials." },
+        { message: "Invalid email or password." },
         { status: 401 }
       );
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
-
     if (!isPasswordCorrect) {
       return NextResponse.json(
-        { message: "Invalid credentials." },
+        { message: "Invalid email or password." },
         { status: 401 }
       );
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
-      expiresIn: "7d",
+    // Issuer/audience are pinned so the backend can reject tokens minted by
+    // anything other than this signin flow (see microService/app/core/auth.py).
+    const token = await new SignJWT({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .sign(getJwtSecretKey());
+
+    const res = NextResponse.json({
+      message: "Signin successful.",
+      user: { id: user.id, email: user.email, name: user.name },
     });
 
-    const res = NextResponse.json({ message: "Signin successful." });
-    res.cookies.set("token", token, {
+    res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 1 , // 1 hour
-      secure: true,
-      sameSite: "none",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
     });
+
     return res;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Signin error:", error);
     return NextResponse.json(
-      { message: "Internal server error." },
+      { message: error?.message || "Internal server error during signin." },
       { status: 500 }
     );
   }

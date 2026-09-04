@@ -1,17 +1,44 @@
 fastapi
-uvicorn 
+uvicorn
 python-multipart
-langchain
-openai 
 python-dotenv
-langchain_core
-langchain_community
-langchain-openai
-langchain-chroma
-pypdf
 aiofiles
+httpx
+openai>=1.50,<2.0
+tiktoken
+
+# Document loading + chunking + vector store
+# Pin a coherent langchain 0.3.x stack to avoid drift across packages.
+langchain>=0.3.20,<0.4
+langchain-core>=0.3.60,<0.4
+langchain-community>=0.3.20,<0.4
+langchain-openai>=0.3.0,<0.4
+langchain-chroma>=0.2.0,<0.3
+# 0.2+ requires langchain-core 1.0; keep 0.1.x to match the 0.3.x langchain stack.
+langchain-huggingface>=0.1.0,<0.2
+sentence-transformers>=3.0,<6.0
+pypdf
 unstructured
 
+# Hybrid retrieval
+rank-bm25
+networkx
+python-louvain
 
-langchain-redis 
-redis
+# Caching (LLM-response + answer cache — survives process restarts)
+diskcache
+
+# Testing
+pytest
+pytest-asyncio
+respx
+
+# Tuning/eval harness (tuning/sweep.py, tuning/report.py)
+tqdm
+
+# OCR fallback for scanned PDFs
+pytesseract
+pdf2image
+
+pyjwt
+slowapi

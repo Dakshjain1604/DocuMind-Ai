@@ -1,32 +1,291 @@
 @import "tailwindcss";
+@import "shadcn/tailwind.css";
+
+@plugin "@tailwindcss/typography";
+
+/* ─────────────────────────────────────────────────────────────
+   DocuMind — Modern Shadcn & Glass Obsidian UI System
+   Deep zinc obsidian canvas, frosted glass surfaces, high-contrast
+   typography, crisp 1px subtle borders, and smooth interaction states.
+   ───────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #171717;
-  --foreground: #171717;
+  /* NB: the shadcn HSL token set used to be declared here. Nothing
+     consumed it — the ui/ primitives hardcode zinc/indigo utilities — so it
+     was removed rather than left as a decoy design system. */
+
+  /* Legacy & Custom Token Aliases */
+  --ink: #09090b;
+  --ink-sidebar: #0c0c0e;
+  --ink-card: rgba(18, 18, 22, 0.75);
+  --ink-card-hover: rgba(28, 28, 35, 0.9);
+  --ink-input: #121215;
+  --rule: rgba(255, 255, 255, 0.09);
+  --rule-hot: rgba(255, 255, 255, 0.35);
+
+  --paper: #fafafa;
+  --paper-2: #d4d4d8;
+  --paper-3: #a1a1aa;
+
+  --vermillion: #6366f1;
+  --vermillion-hot: #818cf8;
+  --vermillion-deep: #4f46e5;
+  --accent-purple: #a855f7;
+
+  --ochre: #fbbf24;
+  --teal: #38bdf8;
+  --moss: #10b981;
+
+  /* .font-display used to load a separate high-contrast serif (Libre Bodoni)
+     for headlines - simplified to the same sans-serif as the rest of the
+     app, just bold, per the "simple, formal, high-readability" direction. */
+  --serif: var(--font-sans), "Inter", -apple-system, system-ui, sans-serif;
+  --sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-vermillion: var(--vermillion);
+  --color-ochre: var(--ochre);
+  --color-teal: var(--teal);
+  --font-display: var(--serif);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+
+
+/* ── Typography Scale ────────────────────────────────────────── */
+.font-display {
+  font-family: var(--serif);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.font-mono-cap {
+  font-family: var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.display-mega {
+  font-size: clamp(48px, 8vw, 84px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.display-xl {
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+.display-lg {
+  font-size: clamp(22px, 2.5vw, 32px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+/* ── Shimmer & Skeleton Animations ────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(39, 39, 42, 0.6) 25%,
+    rgba(63, 63, 70, 0.8) 50%,
+    rgba(39, 39, 42, 0.6) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.blink { animation: blink 1s steps(1) infinite; }
+
+/* Used by the "DocuMind" wordmark (Dashboard header, and the landing/auth
+   headers once they were brought onto the same dark theme). Plain white,
+   not a gradient - the app's palette is neutral (white/zinc) with a single
+   sparing blue accent reserved for citations, not a purple/indigo brand
+   gradient repeated across every header. */
+.gradient-accent-text {
+  color: #ffffff;
+}
+
+@keyframes ticker-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+.ticker-dot {
+  display: inline-block;
+  animation: ticker-pulse 1.4s ease-in-out infinite;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+main, header, footer, nav, aside {
+  position: relative;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
-
-.html{
-  background-color: #0a0a0a;
-  overflow: auto;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

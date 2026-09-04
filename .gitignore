@@ -2,10 +2,12 @@
 node_modules/
 .env
 npm-debug.log
-package-lock.json
 dist/
-backend/config.js
-backend/.env
+.next/
+*.tsbuildinfo
+
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
@@ -17,6 +19,7 @@ venv/
 .env/
 ENV/
 .venv/
+.pytest_cache/
 
 # VSCode
 .vscode/
@@ -26,13 +29,47 @@ logs/
 *.log
 
 # Uploads and generated files
-backend/uploads/
 microService/app/uploaded_files/
+microService/uploaded_files/
+# The actual default (RAG_UPLOAD_DIR in settings.py) — the two patterns above
+# never matched it, so real uploads (which can carry PII) were unprotected.
+microService/tmp/uploaded_files/
 
 # Frontend environment files
 frontend/env
 frontend/node_modules
+frontend/tmp/
+
+# Frontend test artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # Microservice environment files
-microService/.env 
+microService/.env
 microService/app/local_chroma/
+microService/local_chroma/
+microService/test_local_chroma/
+microService/tmp/
+
+# RAG disk cache + trace DB + tuning artifacts (regenerable)
+.rag_cache/
+microService/.rag_cache/
+traces.db
+microService/tuning/.cache/
+microService/tuning/.index_cache/
+microService/tuning/eval_chroma/
+# Full grid-sweep output is noisy/regenerable and stays ignored, but the
+# curated scoped_eval.py ablation (committed as portfolio evidence) is not.
+microService/tuning/results/*.json
+!microService/tuning/results/scoped_ablation.json
+!microService/tuning/results/best_config.json
+microService/tuning/results.csv
+microService/tuning/results.md
+microService/tuning/best_config.json
+microService/app/config/retrieval.json
+
+# Tuning scripts' source PDF + local_chroma — run from repo root (cwd), not
+# microService/; large binary input, not source, regenerable via re-upload
+/tmp/
+/local_chroma/

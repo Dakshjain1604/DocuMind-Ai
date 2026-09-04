@@ -1,70 +1,103 @@
+"""FastAPI app — DocuMind AI hybrid GraphRAG.
 
-import uvicorn
-import aiofiles
-from fastapi import FastAPI, File, UploadFile ,  Form
-import os
-from fastapi.middleware.cors import CORSMiddleware
-from app.routes.summary import summary
-from app.routes.quiz import generate_quiz_cards
-from app.routes.RAG import RAG
-from app.routes.DocContent import clear_document_cache
-app = FastAPI()
+Composition root only: configuration, lifespan, middleware, error handlers and
+router wiring. Request handling lives in app/routes/, business logic in
+app/services/.
+"""
+from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
+
+from app.core.logging_config import configure_logging  # noqa: E402
+from app.core.observability import init_trace_db, log_event  # noqa: E402
+from app.core.rate_limit import limiter  # noqa: E402
+from app.config.settings import get_settings  # noqa: E402
+from app.indexing.store import InvalidDocHash  # noqa: E402
+from app.routes import documents, masterclass, query, studio, telemetry  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Both of these used to be missing entirely: logging was never configured,
+    # and the trace table was created on every single write instead of once.
+    configure_logging()
+    init_trace_db()
+    logger.info("DocuMind service starting")
+    yield
+    logger.info("DocuMind service stopping")
+
+
+app = FastAPI(
+    title="DocuMind",
+    version="1.0.0",
+    description="Hybrid GraphRAG document intelligence: vector + BM25 + knowledge-graph retrieval.",
+    lifespan=lifespan,
+)
+
+# Browser origins allowed to call this service. Defaults to the local Next.js
+# dev server rather than "*", which previously let any page on the internet
+# drive the whole API from a visitor's browser. Value comes from Settings
+# (RAG_CORS_ORIGINS) so there's a single config surface.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
+    allow_origins=list(get_settings().cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-async def getFileLocation(file: UploadFile = File(...)):
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
-    file_location = f"{UPLOAD_DIR}/{file.filename}"
-    file_type=os.path.splitext(file.filename)[1].lower()
-    clear_document_cache()
-    async with aiofiles.open(file_location,"wb")as buffer:
-        content=await file.read()
-        await buffer.write(content)
-        return {
-            "file_location":file_location,
-            "file_type":file_type
-        }
-    
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to FastAPI backend!"}
 
-UPLOAD_DIR = "./tmp/uploaded_files"
-os.makedirs(UPLOAD_DIR, exist_ok=True)  
+@app.exception_handler(InvalidDocHash)
+async def _invalid_doc_hash_handler(_request: Request, exc: InvalidDocHash) -> JSONResponse:
+    """A malformed doc_hash is a client error, not a server fault."""
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-@app.post("/getSummary")
-async def GetSummary(file: UploadFile = File(...)):
-    path =await getFileLocation(file) 
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    result =await summary(file_path,file_type) 
-    return {"filename": file.filename, "summary": result, "status": "completed"}
 
-@app.post("/getQuiz")
-async def GetQuiz(file: UploadFile = File(...)):
-    path =await getFileLocation(file) 
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    result =await generate_quiz_cards(file_path,file_type)
-    return {"filename": file.filename, "summary": result, "status": "completed"}
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Last-resort catch-all: never let a raw traceback reach the client.
 
-@app.post('/RAG')
-async def CustomQandA(file: UploadFile = File(...),
-    input: str = Form(...)
-    ):
-    path= await getFileLocation(file)
-    file_path=path["file_location"]
-    file_type=path["file_type"]
-    input=input
-    result=await RAG(file_path,file_type,input)
-    return {"answer": result}
-    
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+    Every route-specific error path (404s, validation, InvalidDocHash, the
+    fail() envelope) is handled closer to its source; this only fires for
+    genuinely unexpected failures, which still get logged in full server-side.
+    """
+    log_event(
+        "unhandled_exception",
+        path=str(request.url.path),
+        method=request.method,
+        error=str(exc),
+        error_type=type(exc).__name__,
+    )
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": {"code": "internal_error", "message": "Internal server error"}},
+    )
+
+
+from fastapi import Depends
+from app.core.auth import get_current_user
+
+app.include_router(telemetry.router)
+app.include_router(documents.router, dependencies=[Depends(get_current_user)])
+app.include_router(query.router, dependencies=[Depends(get_current_user)])
+app.include_router(studio.router, dependencies=[Depends(get_current_user)])
+app.include_router(masterclass.router, dependencies=[Depends(get_current_user)])
